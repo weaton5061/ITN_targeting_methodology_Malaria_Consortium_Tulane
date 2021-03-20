@@ -5,6 +5,9 @@ date: "3/18/2021"
 output: word_document
 ---
 
+File created for Nigerian data management and creation of chloropleth maps
+for 2020 ITN prioritzation within local government areas (LGAs) of Nigeria
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -35,8 +38,11 @@ cat("\014")
 
 ```{r}
 # Explore color palette ---
+# run this code if you would like to inspect some color options
 # palette_explorer()
 ```
+
+
 
 
 ## Load packages
@@ -64,10 +70,9 @@ library(malariaAtlas)
 library(exactextractr)
 library(maptools)
 library(sf)
-library("spDataLarge")
+# library("spDataLarge")
 library(dplyr)
 library(GADMTools)
-
 
 library(maptools)
 library(readr)
@@ -102,9 +107,24 @@ require(RCurl)
 require(R.utils)
 require(gdalUtils)
 require(parallel)
+# library(spDataLarge)
 ```
 
-## Obtain administrative boundaries 
+# Inputs include:
+#   1) master data set (compiled by A. Young)
+#   2) spatial interpolation outputs (created by M. Worges)
+
+# Outputs include: 
+#   1) weighted malaria risk / ITN priortiziation map
+#   2) unweighted malaria risk / ITN priortization map
+#   3) individual indicator input maps for creation of final malaria risk/ ITN
+#      prioritization index
+
+# Date created: 7-12-20
+# Date modified: 8-22-20
+# Local drive location: /Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Methodology/R Code/MC R Code/Malaria-Consortium
+# git: https://github.com/weaton5061/Malaria-Consortium.git
+# -----------------------------------------------------------------------------
 
 ```{r}
 
@@ -136,47 +156,17 @@ View(adm2.nga.df)                       # View adm2.nga.df
 
 
 ```{r cars}
-# -----------------------------------------------------------------------------
-# Nigeria new chloropleth map code
-# Author: Will Eaton
-
-# Author comment
-# File created for Nigerian data management and creation of chloropleth maps
-# for 2020 ITN prioritzation within local government areas (LGAs) of Nigeria
-
-# Inputs include:
-#   1) master data set (compiled by A. Young)
-#   2) spatial interpolation outputs (created by M. Worges)
-
-# Outputs include: 
-#   1) weighted malaria risk / ITN priortiziation map
-#   2) unweighted malaria risk / ITN priortization map
-#   3) individual indicator input maps for creation of final malaria risk/ ITN
-#      prioritization index
-
-# Date created: 7-12-20
-# Date modified: 8-22-20
-# Local drive location: /Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Methodology/R Code/MC R Code/Malaria-Consortium
-# git: https://github.com/weaton5061/Malaria-Consortium.git
-# -----------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
 # TASKS:
 # 1) Where is differentiation with n = 774 and n = 775 LGAs /shape
 #    files
 #-------------------------------------------------------------------------------
 
-
-
-
 # Code color palette modifications --------------------------------------------
 # col = RColorBrewer::brewer.pal(4, "YlOrRd"),
 
-
-
 # Set (modifiable) working directory ------------------------------------------
 # setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\smc") # PC
-
-
 
 # --------------------------------------------------------------------------
 # Make nga states map n = 75 states (text size relative to polygon area) ---
