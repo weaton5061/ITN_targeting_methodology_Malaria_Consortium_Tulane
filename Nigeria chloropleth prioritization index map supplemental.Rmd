@@ -1,0 +1,2289 @@
+---
+title: "Nigeria chloropleth prioritization index code"
+author: "W.E., A.Y., H.H."
+date: "3/28/2021"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Clear workspace
+
+# Task: 
+
+## 1) Create workspace to pull from git or pull from the same folder as Rproject
+
+Remove objects from current workspace, Clear startup/console, close plots
+
+```{r}
+# Remove all objects from the current workspace (R memory) --------------------
+rm(list = ls())
+
+# This function closes the specified plot (by default the current device) -----
+# and if it is an imguR device, uploads the plots for web hosting -------------
+dev.off()
+
+# Clear startup screen/console in R / RStudio ----------------------------------
+cat("\014") 
+
+# Set a 
+```
+
+## Explore color palette
+
+```{r}
+# Explore color palette ---
+# palette_explorer()
+
+```
+
+
+## Load packages
+
+## Task: 
+## 1) filter through these and determine which packages you don't need
+## 2) determine which packages might interfere with concurrently loaded packages
+   and make a note of it
+
+```{r}
+
+# Load packages - these are the main packages utilized
+library(raster)
+library(sp)
+library(tmap)
+library(tmaptools)
+library(BAMMtools)
+library(exactextractr)
+
+# Remaining packages that may be utilized
+
+library(readxl)
+library(ggplot2)
+library(malariaAtlas)
+library(exactextractr)
+library(maptools)
+library(sf)
+# library("spDataLarge")
+library(dplyr)
+library(GADMTools)
+
+library(maptools)
+library(readr)
+library(foreign)   ; library(tsModel) ; library("lmtest") ; library("Epi")
+library("splines") ; library("vcd")
+library(reshape2)  ; library(hablar)
+library(tidyr)     
+library (viridis)
+library(data.table)
+library(forecast)  ; library(MASS)
+library(tseries)   ; library(scales)
+library(tsModel)   ; library(extrafont)
+library(lmtest)    ; library(tidyverse)
+library(stargazer) ; library(RColorBrewer)
+library(readxl)    ; library(olsrr)
+library(Hmisc)
+library(MASS)
+library(dplyr)
+library(devEMF)
+library(padr)
+library(zoo)
+library(tidyverse)
+library(naniar)
+library(GGally)
+library(cartogram)
+library(mgcv)
+library(rgdal)
+library(leaflet)
+library(arsenal)
+require(data.table)
+require(RCurl)
+require(R.utils)
+require(gdalUtils)
+require(parallel)
+```
+
+## Load necessary administrative boundary shapefiles and plot
+
+```{r}
+# -----------------------------------------------------------------------------
+# Nigeria new chloropleth map code
+# Author: Will Eaton
+
+# Author comment
+# File created for Nigerian data management and creation of chloropleth maps
+# for 2020 ITN prioritzation within local government areas (LGAs) of Nigeria
+
+# Inputs include:
+#   1) master data set (compiled by A. Young)
+#   2) spatial interpolation outputs (created by M. Worges)
+
+# Outputs include: 
+#   1) weighted malaria risk / ITN priortiziation map
+#   2) unweighted malaria risk / ITN priortization map
+#   3) individual indicator input maps for creation of final malaria risk/ ITN
+#      prioritization index
+
+# Date created: 7-12-20
+# Date modified: 8-22-20
+# Local drive location: /Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Methodology/R Code/MC R Code/Malaria-Consortium
+# git: https://github.com/weaton5061/Malaria-Consortium.git
+# -----------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+# TASKS:
+# 1) Where is differentiation with n = 774 and n = 775 LGAs /shape
+#    files
+#-------------------------------------------------------------------------------
+
+# Code color palette modifications --------------------------------------------
+# col = RColorBrewer::brewer.pal(4, "YlOrRd"),
+
+# Set (modifiable) working directory ------------------------------------------
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\smc") # PC
+
+# Get admin boundaries ----------------------------------------------------
+# GADM, the Database of Global Administrative Areas, is a high-resolution 
+# database of country administrative areas, with a goal of “all countries, 
+# at all levels, at any time period.
+adm0.nga <- subset(getData("GADM", country = "NGA", level = 0)) # Country
+# plot(adm0.nga)
+adm1.nga <- subset(getData("GADM", country = "NGA", level = 1)) # n = 37 states
+# has n = 37 unique identifiers using NAME_1 and GID_1
+# plot(adm1.nga)
+
+# Bring in HDX shapefile for comparison (n=75 level 1) ------------------------
+# nga_ocha_level_1 <- st_read(dsn = "D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Shapefiles\\nga_adm_osgof_20190417\\nga_admbnda_adm0_osgof_20190417.shp") # PC
+
+# adm2.nga appears to be LGAs with unique identifiers called GID_2 ------------
+# appears to have n = 775 observations for GID_2
+# Note: If I use NAME_2, only n = 770 unique identifiers exist
+adm2.nga <- subset(getData("GADM", country = "NGA", level = 2)) # LGAs
+plot(adm2.nga)
+
+# Plot map in tmap ------------------------------------------------------------
+tm_shape(adm2.nga) + tm_polygons("GID_2") + tm_legend(show=FALSE)
+
+# View adm2.nga as data frame -------------------------------
+adm2.nga.df <- as.data.frame(adm2.nga)
+View(adm2.nga.df)                       # View adm2.nga.df
+
+```
+
+### Make nga states map n = 75 states
+
+```{r}
+# --------------------------------------------------------------------------
+# Make nga states map n = 75 states (text size relative to polygon area) ---
+# --------------------------------------------------------------------------
+tm_shape(adm1.nga) + tm_fill("GID_1", palette = "PiYG") + tm_borders("NAME_1")
+
+# use for state borders below 
+# tm_shape(adm1.nga)  + tm_borders(col = "grey40", lwd = 1)
+
+# Save nga states map to object --------------------------------------------
+# Note: not working on Will's mac 8-23-20, however, maps saved appropriately
+# to working directory listed below
+nga_states_map <- tm_shape(adm1.nga) + 
+    tm_fill(col = "MAP_COLORS", legend.show = FALSE) + 
+    tm_layout(frame = FALSE) + 
+    tm_polygons(col = "MAP_COLORS", legend.show = FALSE) + 
+    tm_borders(col = "grey40", lwd = 1) + tm_text("NAME_1", size = "AREA") + 
+    tm_scale_bar() + tm_compass( position = c("right","top"))
+
+# Save nga states (with 0.5 size text) to map object
+nga_states_map_0_5_text <- tm_shape(adm1.nga) + 
+    tm_fill(col = "MAP_COLORS", legend.show = FALSE) + 
+    tm_layout(frame = FALSE) + 
+    tm_polygons(col = "MAP_COLORS", legend.show = FALSE) + 
+    tm_borders(col = "grey40", lwd = 1) + tm_text("NAME_1", size = 0.5) + 
+    tm_scale_bar() + tm_compass( position = c("right","top"))
+
+# Save nga states (with 0.75 size text) to map object
+nga_states_map_0_75_text <- tm_shape(adm1.nga) + 
+    tm_fill(col = "MAP_COLORS", legend.show = FALSE) + 
+    tm_layout(frame = FALSE) + 
+    tm_polygons(col = "MAP_COLORS", legend.show = FALSE) + 
+    tm_borders(col = "grey40", lwd = 1) + tm_text("NAME_1", size = 0.75) + 
+    tm_scale_bar() + tm_compass( position = c("right","top"))
+
+# Save nga states map ---------------------------------------------------------
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\nga states") # Travis PC
+# Maps saved appropriately to working directory
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/nga states") # Mac
+tmap_save(nga_states_map, "nga_states_map.png",
+          width =6.78, height=5, units ='in', asp = 0)
+tmap_save(nga_states_map_0_5_text, "nga_states_map_0_5_text.png",
+          width =6.78, height=5, units ='in', asp = 0)
+tmap_save(nga_states_map_0_75_text, "nga_states_map_0_75_text.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+# Bring in OCHA Nigeria Shapefile with hopefully country boundary for water (Verify) ----------
+hdx_nga_admin_0 <- st_read(dsn = "D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Shapefiles\\nga_adm_osgof_20190417\\nga_admbnda_adm0_osgof_20190417.shp")
+tm_shape(hdx_nga_admin_0) + tm_polygons("ADM0_EN") + tm_legend(show=FALSE)  + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.outside.position = "right")
+# Verify shapefile - LOOKS GOOD!
+
+# Bring in OCHA admin 2 shapefile for comparison -------------------------------------
+# Appears to have n = 774 observations for ADM2_EN
+hdx_nga_admin_2 <- st_read(dsn = "D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Shapefiles\\nga_adm_osgof_20190417\\nga_admbnda_adm2_osgof_20190417.shp")
+tm_shape(hdx_nga_admin_2) + tm_polygons("ADM2_EN") + tm_legend(show=FALSE) +
+tm_layout(frame = FALSE, legend.outside = TRUE, 
+          legend.outside.position = "right")
+# Verify shapefile - LOOKS GOOD!
+```
+
+## Import data and peform data managment steps
+### (!!!consider reorganizing and renaming this section!!!)
+
+```{r}
+# Bring in Nigeria current master dataset NGA_master6.csv ---------------------------------
+# nga_master6 <- read.csv("//Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/NGA_master6_2.csv", header = TRUE) # Mac
+# nga_master6 <- read.csv("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\NGA_master6_2.csv", header = TRUE) #PC
+# Bring in NGA_master6_2.xls excel file in as .xls instead of .csv
+# See if this resolves variable renaming issues (NAME_2)
+setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data")
+nga_master6 <- read_excel("NGA_master6_2.xls")
+# View(nga_master6)
+
+# Bring in spatial interpolation data from M. Worges 
+# (n = 775 LGAs, usingunique identifier = GID_2)
+setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\MWorges INLA SPDE") # Travis PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/MWorges INLA SPDE")
+sp_interp_data <- read_excel("ZonalStats_NGA_V5.xlsx")
+
+# Check sp_interp_data for missing values ------------------------------------
+table(sp_interp_data$NetAvlblty.wghted, useNA = "always") # no missing values
+
+# Note: net availability variable is the proportion of households with 
+# at least 1 net per 2 people. 
+# Will need to take complement value, create, class, 
+# apply weight then, create score
+
+# Create jenks/breaks --------------------------------------------
+# With natural breaks classification (Jenks) Natural Breaks Jenks, 
+# classes are based on natural groupings inherent in the data. 
+# Class breaks are identified that best group similar values and 
+# that maximize the differences between classes. The features are 
+# divided into classes whose boundaries are set where there are 
+# relatively big differences in the data values.
+# 
+# Natural breaks are data-specific classifications and not useful for 
+# comparing multiple maps built from different underlying information.
+
+###############################################
+# Left off here 7-13-20 @ 11:54 pm
+# TASK: 1) Figure out when to apply weight
+# and 2) make net availability map
+# 3) merge with master dataset again by GID_2
+###############################################
+
+```
+
+## Jenks natural breaks steps (!!!rename this section!!!)
+
+```{r}
+
+# Net availability -----------------------------------------------
+getJenksBreaks(sp_interp_data$NetAvlblty.wghted, 5, subset = NULL)  
+# [1] 0.009014783 0.233290972 0.354107688 0.493038245 0.792025051
+# (to use in legend)
+
+# Create weighted complement net availability score variable ------------------
+# variable in Matt's sp_interp_data is called NetAvlblty.wghted
+sp_interp_data$net_avlblty_complement <- (1 - sp_interp_data$NetAvlblty.wghted)
+# sp_interp_data$net_avlblty_score_complement_wghtd <- sp_interp_data$net_avlblty_complement * sp_interp_data$net_avlblty_wt
+
+# Net availability complement jenks -----------------------------------------------
+getJenksBreaks(sp_interp_data$net_avlblty_complement, 5, subset = NULL)  
+# [1] 0.2079749 0.4951487 0.6451532 0.7655778 0.9909852
+
+```
+
+## Create complement classes (!!! rename this section)
+
+```{r}
+
+# Assign net availability classes (numeric)
+sp_interp_data$net_avlblty_complement_class[sp_interp_data$net_avlblty_complement > 0.7655778] <- 4     # classify as rank 4
+sp_interp_data$net_avlblty_complement_class[sp_interp_data$net_avlblty_complement <= 0.7655778 & sp_interp_data$net_avlblty_complement > 0.6451532 ] <- 3     # classify as rank 3
+sp_interp_data$net_avlblty_complement_class[sp_interp_data$net_avlblty_complement <= 0.6451532 & sp_interp_data$net_avlblty_complement > 0.4951487 ] <- 2     # classify as rank 2
+sp_interp_data$net_avlblty_complement_class[sp_interp_data$net_avlblty_complement < 0.4951487] <- 1 # classify as rank 1
+
+# Show the distribution of net availability complement class
+table(sp_interp_data$net_avlblty_complement_class, useNA = "always")
+#  1    2    3    4 <NA> 
+# 78  220  248  229    0 
+
+# Set net availability weight to 0.75
+sp_interp_data$net_avlblty_wt <- 0.75
+
+# Create net availability score variable --------------------------------------
+sp_interp_data$weighted_net_avlblty_complement_score <- sp_interp_data$net_avlblty_wt * sp_interp_data$net_avlblty_complement_class
+
+# Show distribution of weighted net availability complement score -------------
+table(sp_interp_data$weighted_net_avlblty_complement_score, useNA = "always")
+#   0.75  1.5 2.25    3 <NA> 
+#     78  220  248  229    0 
+
+# slim sp_interp_data to merge with nga_master6 ------------------------------
+myvars <- c(6,15:26)
+sp_interp_data_slim <- sp_interp_data[myvars]
+
+# merge sp_interp_data_slim (13 variables) and ------------------------------
+# nga_master6 datasets (103 variables) 
+nga_master6_sp_combo <- nga_master6
+nga_master6_sp_combo <- merge(x=nga_master6, y=sp_interp_data_slim, by="GID_2", all = TRUE)
+
+# slim nga_master6_sp_combo dataset ------------------------------------------
+# myvars2 <- c()
+# Shorten name of master data set
+nga_7 <- nga_master6_sp_combo
+
+```
+
+
+## Import COVID data and manage COVID data
+
+```{r}
+# 8-4-20 Bring in newest COVID-19 data for Nigeria
+# Note: Newer COVID-19 data has been imported as of 8-27-20
+nga_7_df_v2_covid <- read.csv("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/nga_7_df_v2_covid.csv")
+
+#------------------------------------------------------------------------------
+# 8-28-20 modification --------------------------------------------------------
+#------------------------------------------------------------------------------
+# 1) Bring in Alyssa's revised data set that has updated COVID-19 case count data
+# 2) Dbl check yrs since last LLIN variable that have 2020 entries
+nga_8_28_20.df <- read.csv("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/nga_8_df_28_20.csv") # Mac
+
+# Slim down nga_8_28_20.df data set
+nga_8_28_20_vars <- c(2, 6, 15:22, 32:41, 51:92)
+nga_8_28_20_slim.df <- nga_8_28_20.df[nga_8_28_20_vars]
+View(nga_8_28_20_slim.df)
+
+# Slim down nga_8_28_20_slim.df to just COVID variables
+covid_8_28_20_vars <- c(1, 2, 16, 24, 25, 43, 56)
+covid_8_28_20.df <- nga_8_28_20_slim.df[covid_8_28_20_vars]
+View(covid_8_28_20.df)
+
+
+# COVID jenks ----------------------------------------------------------------
+# Obtain 5 classes of breaks for COVID 
+# Updated jenks (8-28-20) for COVID cases
+getJenksBreaks(covid_8_28_20.df$Covid_case_28_8_20, 5, subset = NULL)
+# [1]     5  1142  2555  5094 18056
+
+summary(covid_8_28_20.df$Covid_case_28_8_20)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+#   5     241     740    1403    1722   18056 
+
+covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 > 5094] <- 4                                               # classify as rank (class) 4
+covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 <= 5094 & covid_8_28_20.df$Covid_case_28_8_20 > 2555] <- 3 # classify as rank (class) 3
+covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 <= 2555 & covid_8_28_20.df$Covid_case_28_8_20 > 1142] <- 2 # classify as rank (class) 2
+covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 <= 1142] <- 1                                              # classify as rank (class) 1
+
+# Assign covid weight
+covid_8_28_20.df$covid_wt <- 0.28
+
+# Create covid score variable (from Aug 2020 data)
+covid_8_28_20.df$COVID_case_score_aug_8_wtd <- covid_8_28_20.df$covid_wt * covid_8_28_20.df$COVID_class_aug_28 
+
+# copy weighted case score to previous weighted case score variable
+covid_8_28_20.df$covid_case_score_wtd <- covid_8_28_20.df$COVID_case_score_aug_8_wtd
+
+# View dataset for quick check
+View(covid_8_28_20.df)
+
+# How many different score categories? Are any missing? -----
+table(covid_8_28_20.df$COVID_case_score_aug_8_wtd, useNA = "always")
+# Previous score categories using July 10 case counts ----
+# 0.28 0.56 0.84 1.12 <NA> 
+#  361  225  169   20    0
+
+# New score categories using July 21 case counts ----
+# 0.28 0.56 0.84 1.12 <NA> 
+#  545  153   57   20    0 
+
+# Newest score categories using Aug 8 case counts ----
+# 0.28 0.56 0.84 1.12 <NA> 
+#  528  188   39   20    0 
+
+# Convert covid_case_score_wtd to factor variable
+covid_8_28_20.df$covid_case_score_wtd <- as.factor(covid_8_28_20.df$covid_case_score_wtd)
+
+# Rename gid_2 to GID_2
+covid_8_28_20.df$GID_2 <- covid_8_28_20.df$gid_2
+
+```
+
+## Malaria atlas data manipulation
+
+```{r}
+#------------------------------
+# MALARIA ATLAS PROJECT DATA
+#------------------------------
+
+# Temperature suitability ----
+
+# Show malaria atlas project data available----------
+listData('raster', printed = TRUE)
+listRaster(printed = TRUE)
+#  Plasmodium falciparum Temperature Suitability 
+
+# Download malaria atlas project temp suitability raster layer ---------------
+NGA_shp <- getShp(ISO = "NGA", admin_level = "admin0")
+
+# (From https://rdrr.io/cran/malariaAtlas/man/getRaster.html)
+nga_temp_suit_raster <- getRaster(surface = "Plasmodium falciparum Temperature Suitability", shp = NGA_shp)
+# Visualize raster in plot
+autoplot_MAPraster(nga_temp_suit_raster) #THIS WORKS!!!
+
+#----------------------------------------------------------------------------
+# Temperature suitability index for P. falciparum transmission, 2010
+#----------------------------------------------------------------------------
+# Source: Gething, P. W., Van Boeckel, T. P., Smith, D. L., Guerra, C. A., 
+# Patil, A. P., Snow, R. W., & Hay, S. I. (2011). 
+# Modelling the global constraints of temperature on transmission of Plasmodium
+# falciparum and P. vivax. Parasites and Vectors, 4(1), 92. 
+# https://doi.org/10.1186/1756-3305-4-92
+#----------------------------------------------------------------------------
+# The normalized Z(T) index of temperature suitability that incorporates not
+# just the duration but also the degree of suitability across an average year. 
+# See text for a full explanation of all three metrics
+
+# Assign temp suitability map to object (grey50 border color and grey50 tm_borders)
+# This provides visualization of raster layer w/o LGA boundaries
+temp_suit_raster_map <- tm_shape(nga_temp_suit_raster) +
+    tm_raster("Plasmodium.falciparum.Temperature.Suitability", 
+              # palette = pal8, 
+              title = "Plasmodium falciparum Temperature Suitability") +
+    tm_shape(adm2.nga) + tm_polygons("GID_2", lwd = 0.25, col = "gray3",
+                                     border.col = "grey50") 
+
+# This code provides visualization of raster layer w/ LGA boundaries
+temp_suit_raster_lga_map <- tm_shape(nga_temp_suit_raster) +
+    tm_raster("Plasmodium.falciparum.Temperature.Suitability", 
+              title = "Plasmodium falciparum Temperature Suitability") +
+    tm_shape(adm2.nga) + tm_borders(col = "gray3") +
+    tm_layout(frame = FALSE)
+
+# set working directory for temp suitability map 
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/temp suitability") # Mac
+# save temp suitability map to working directory listed above
+tmap_save(temp_suit_raster_lga_map, "temp_suit_raster_lga_map.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+# Zonal statisitics LGAs & temperature suitability index ----------------
+# Extract temperature suitability to LGA (n = 775)
+adm2.nga.sf <- st_as_sf(adm2.nga)
+# nga_temp_suit_extract_lga$mean_temp_suit <- extract(nga_temp_suit_raster, 
+#                                                     adm2.nga.sf, fun=mean, 
+#                                                     na.rm=TRUE, df=TRUE)
+nga_temp_suit_extract_lga$mean_temp_suit <- exact_extract(nga_temp_suit_raster, adm2.nga.sf, 'mean') # this code did not work
+# The code above did not work due to the following error:
+# Error in (function (classes, fdef, mtable)  : 
+# unable to find an inherited method for function ‘exact_extract’ for signature
+# ‘"RasterLayer", "SpatialPolygonsDataFrame"’
+
+# Convert nga_temp_suit_extract_lga to data frame for quick visual inspection --
+nga_temp_suit_extract_lga.df <- as.data.frame(nga_temp_suit_extract_lga)
+View(nga_temp_suit_extract_lga.df)
+
+# slim down nga_temp_suit_extract_lga
+nga_temp_suit_extract_lga_slim <- nga_temp_suit_extract_lga[c(6, 14, 15) ]
+# convert to df
+nga_temp_suit_extract_lga_slim.df <- as.data.frame(nga_temp_suit_extract_lga_slim)
+# slim nga_temp_suit_extract_lga_slim.df data frame even more
+temp_suit.df <- nga_temp_suit_extract_lga_slim.df[c(1,3)]
+
+# Create new variable in nga_7 ------------------------------------------
+# How many LGAs are receiving SMC? n = 72
+# table(nga_master6$SMC_class)
+#       0    1 <NA> 
+#     703   72    0 
+
+```
+
+## SMC coverage
+
+```{r}
+
+# Create new SMC coverage weight = 0.82
+nga_7$smc_weight_0_82 <- 0.82
+# nga_7$smc_score_weighted <- nga_7$smc_weight_0_82 * nga_7$SMC_class calculated incorrectly
+
+# States that received SMC include:
+Borno         6% coverage
+Yobe         27% coverage
+Katsina      26% coverage
+Jigawa      107% coverage
+Sokoto      111% coverage
+Zamfara     114% coverage
+
+```
+
+## Built pop
+
+```{r}
+# Manipulate built environment up presence layer  ------------------------
+# from Landsat image collections
+summary(nga_7$BuiltPop_2014)    
+#    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+# 0.00058  0.17165  0.60954  5.16307  1.99653 98.60358 
+
+# built environment
+getJenksBreaks(nga_7$BuiltPop_2014, 5, subset = NULL) # obtain 5 classes of breaks for Built_switch 
+# [1] 5.822306e-04 6.389496e+00 2.261250e+01 5.156892e+01 9.860358e+01
+
+# Create Built environ (rural/urban) weight variable -------
+nga_7$Built_wt <- 0.54
+
+# Create equal weight variable for data set ---------
+nga_7$eq_wt <- 0.50
+
+# Make BuiltPop_2014 variable a value between 0 and 1
+nga_7$BuiltPop_hundredth <- (nga_7$BuiltPop_2014) / 100
+
+# Create complement variable (1 - BuiltPop_hundredth value)
+nga_7$Built_switch <- 1- nga_7$BuiltPop_hundredth 
+
+# Create jenks / breaks # built environment ----------------------------------
+# Obtain 5 classes of breaks for Built_switch
+# For built switch, value near zero will represent low risk malaria, likely,
+# much built area (urban), while value near 1 will represent higher risk malaria with
+# less built area (rural)
+getJenksBreaks(nga_7$Built_switch, 5, subset = NULL)  
+# [1] 0.01396416 0.39074421 0.75832115 0.93383096 0.99999418
+
+```
+
+## Create built pop classes
+
+```{r}
+
+
+# Create built classes
+nga_7$Built_class[nga_7$Built_switch >  0.93383096] <- 4                                          # classify as rank 4
+nga_7$Built_class[nga_7$Built_switch <= 0.93383096   & nga_7$Built_switch > 0.75832115 ] <- 3     # classify as rank 3
+nga_7$Built_class[nga_7$Built_switch <= 0.75832115   & nga_7$Built_switch > 0.39074421 ] <- 2     # classify as rank 2
+nga_7$Built_class[nga_7$Built_switch <  0.39074421] <- 1                                          # classify as rank 1
+
+# Create slim subset to inspect BuiltPop_2014
+built_vars <- c(1,2,106, 116:118)
+built_vars_slim <- nga_7[built_vars]
+View(built_vars_slim)
+
+# Create built class variable
+nga_7$Built_class <- as.numeric(nga_7$Built_class) # convert Built_class class to numeric
+
+# Built score calculation
+nga_7$Built_score <- nga_7$Built_class * nga_7$Built_wt # create Built weighted score 
+
+# Equal wt Built score calculation
+nga_7$Built_eq_wt_score <- nga_7$Built_class * nga_7$eq_wt        #create built eq wt score
+
+```
+
+## Precipitation - rainfall
+
+```{r}
+# Remove precipitation months before June 2019
+nga_7_subset <- subset(nga_7, select = -c(35:75, 87:98))
+
+# Previous rainfall code that included negative values. Suspect negative values weren't converted
+# to zeros prior to extraction and mean calculations
+# Create mean annual rainfall (June 2019 - May 2020, the past 12 
+# months of data)variable (by LGA)
+# nga_7_subset$mean_an_rf <- ((nga_7_subset$mean_jun19_prec + nga_7_subset$mean_jul19_prec +
+#     nga_7_subset$mean_aug19_prec + nga_7_subset$mean_sep19_prec + nga_7_subset$mean_oct19_prec +
+#     nga_7_subset$mean_nov19_prec + nga_7_subset$mean_dec19_prec + nga_7_subset$mean_jan20_prec +
+#     nga_7_subset$mean_feb20_prec + nga_7_subset$mean_mar20_prec + nga_7_subset$mean_apr20_prec +
+#     nga_7_subset$mean_may20_prec) / 12)
+
+# Re-examine CHIRPS Rainfall data -------------------------------------------------------------
+# Result : Re-extracted rainfall data after eliminating negative values. Coding provided in 
+# CHIRPS_Nigeria_data_manipulation.R script modified on 8-3-20. 
+# File is found here:
+# /Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Methodology/R Code/MC R Code/Malaria-Consortium/Malaria-Consortium
+# Redo mean annual rainfall variable 8-3-20 since negative values were not removed previously
+# or not converted to missing values
+# TASK: revisit this code on 8-24-20
+nga_7_subset$mean_an_rf <- ((nga_lga.df$mean_jun19_rf + nga_lga.df$mean_jul19_rf +
+                                 nga_lga.df$mean_aug19_rf + nga_lga.df$mean_sep19_rf + nga_lga.df$mean_oct19_rf +
+                                 nga_lga.df$mean_nov19_rf + nga_lga.df$mean_dec19_rf + nga_lga.df$mean_jan20_rf +
+                                 nga_lga.df$mean_feb20_rf + nga_lga.df$mean_mar20_rf + nga_lga.df$mean_apr20_rf +
+                                 nga_lga.df$mean_may20_rf) / 12)
+
+# Re-examine CHIRPS Rainfall data - ensure no negative values in mean annual rf calculations
+# Good to go this time 
+summary(nga_7_subset$mean_an_rf)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 30.85   81.59  117.90  130.48  166.15  300.44 
+
+# Calculate jenks for rainfall ------------------------------------------------
+# obtain 5 classes of breaks for mean annual rainfall
+getJenksBreaks(nga_7_subset$mean_an_rf, 5, subset = NULL) 
+# [1]  30.85152  92.29017 146.79149 206.53586 300.44352
+
+# 8-3-20 Note: no change in rainfall class jenks/breaks after removing 
+# negative rainfall values
+
+# Create mean annual rainfall classes ----------------------------------------
+nga_7_subset$rf_class[nga_7_subset$mean_an_rf >  206.53586] <- 4                                            # classify as rank 4
+nga_7_subset$rf_class[nga_7_subset$mean_an_rf <= 206.53586   & nga_7_subset$mean_an_rf > 146.79149 ] <- 3   # classify as rank 3
+nga_7_subset$rf_class[nga_7_subset$mean_an_rf <= 146.79149   & nga_7_subset$mean_an_rf > 92.29017  ] <-  2  # classify as rank 2
+nga_7_subset$rf_class[nga_7_subset$mean_an_rf <  92.29017]  <- 1                                            # classify as rank 1
+
+# Created rainfall weight
+nga_7_subset$rf_wt <- 0.78
+
+# Calculate rainfall weighted score
+nga_7_subset$rf_score <- nga_7_subset$rf_class * nga_7_subset$rf_wt  
+
+# Calculate rainfall unweighted score
+nga_7_subset$rf_eqwt_score <- nga_7_subset$rf_class * nga_7_subset$eq_wt 
+
+# Subset made on 8-26-20
+# Subset nga_7_subset to make revised rainfall map 
+rf_vars <- c(1, 3, 70:75)
+rf_vars_slim <- nga_7_subset[rf_vars]
+View(rf_vars_slim)
+
+# see rf scores
+table(rf_vars_slim$rf_score, useNA = "always")
+# 0.78 1.56 2.34 3.12 <NA> 
+#  245  296  110  124    0 
+
+# 8-26-20 try this merged dataset for new rainfall map
+# Success! Worked appropriately on 8-26-20
+nga_7_rf.spdf <- merge(adm2.nga, rf_vars_slim, by="GID_2", duplicateGeoms = T)
+
+# Subset nga_7_subset even further in order to merge with master dataset ------
+# used in map production
+# Keep the following variables: GID_2, mean_an_rf, rf_class, rf_wt, 
+# rf_score, rf_eqwt_score
+
+# reverse smc class
+# if(nga_7_subset$smc_score_weighted == 0){ nga_7_subset$smc_score_weighted_rev == 1 }
+# if (nga_7_subset$smc_score_weighted == 0) nga_7_subset$smc_score_reverse == 1 else nga_7_subset$smc_score_reverse == 0
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+# TASK: modify this code and perform this task in R  #
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+
+# write.csv in order to manually reverse 0 and 1 values
+write.csv(nga_7_subset,"D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\nga_7_subset.csv", row.names = TRUE)
+# Bring csv back in after modifying SMC values/scores (reversing)
+nga_7_subset_smc_rev <- read.csv("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\nga_7_subset_smc_rev.csv", header = TRUE)
+
+```
+
+## Data management
+
+```{r}
+#******************************************************************************
+# Merge temp suitability index data with nga_7_subset_smc_rev
+#******************************************************************************
+nga_7_subset_smc_rev_2 <- merge(nga_7_subset_smc_rev, temp_suit.df, 
+                    by="GID_2", duplicateGeoms = T)
+# Make nga_7_subset_smc_rev_2 a data frame
+# nga_7_subset_smc_rev_2.df <- as.data.frame(nga_7_subset_smc_rev_2)
+
+```
+
+## Temperature suitability jenks
+
+```{r}
+# --------------------------------------------------------------------------
+# TEMP SUITABILITY jenks
+# --------------------------------------------------------------------------
+# Create jenks / breaks # temp suitability  ----------------------------------
+# Obtain 5 classes of breaks for temp suitability
+# For temp suitability, value near zero will represent low risk malaria, likely,
+# The normalized Z(T) index of temperature suitability that incorporates not
+# just the duration but also the degree of suitability across an average year. 
+getJenksBreaks(nga_7_subset_smc_rev_2$mean_temp_suit, 5, subset = NULL)  
+# [1] 0.3015740 0.4532296 0.5710385 0.6795321 0.7636224
+```
+
+## Temperature suitability classes
+
+```{r}
+# Create temp suitability classes
+nga_7_subset_smc_rev_2$temp_suit_class[nga_7_subset_smc_rev_2$mean_temp_suit >  0.6795321] <- 4                                        # classify as rank 4
+nga_7_subset_smc_rev_2$temp_suit_class[nga_7_subset_smc_rev_2$mean_temp_suit <= 0.6795321   & nga_7_subset_smc_rev_2$mean_temp_suit > 0.5710385 ] <- 3     # classify as rank 3
+nga_7_subset_smc_rev_2$temp_suit_class[nga_7_subset_smc_rev_2$mean_temp_suit <= 0.5710385   & nga_7_subset_smc_rev_2$mean_temp_suit > 0.4532296 ] <- 2    # classify as rank 2
+nga_7_subset_smc_rev_2$temp_suit_class[nga_7_subset_smc_rev_2$mean_temp_suit <  0.4532296] <- 1                                          # classify as rank 1
+
+# Create slim subset to inspect temp suit class variables
+temp_vars <- c(1, 3, 78, 79)
+temp_vars_slim <- nga_7_subset_smc_rev_2[temp_vars]
+View(temp_vars_slim)
+```
+
+## Temperature suitability score calculations
+
+```{r}
+
+# Create temp suitability weight ----------
+nga_7_subset_smc_rev_2$temp_suit_wt <- 0.58 
+
+# temp suit score calculation
+nga_7_subset_smc_rev_2$temp_suit_score <- nga_7_subset_smc_rev_2$temp_suit_class * nga_7_subset_smc_rev_2$temp_suit_wt # create temp suitability weighted score 
+# make temp suit sore a factor variable
+nga_7_subset_smc_rev_2$temp_suit_score <- as.factor(nga_7_subset_smc_rev_2$temp_suit_score)
+# Equal wt temp suitability score calculation
+nga_7_subset_smc_rev_2$temp_suit_eq_wt_score <- nga_7_subset_smc_rev_2$temp_suit_class * nga_7_subset_smc_rev_2$eq_wt   #create temp suitability eq wt score
+
+# NOTE: Disruptive event, which captures internally displaced populations 
+# has a weight of 0.4 (already included in score (weighted)) 
+# rather than original, 0.28
+
+```
+
+## PBO nets score calculations
+
+```{r}
+
+#******************************************************************************
+#* TASK: Add PBO net designation layer to prioritization index and map
+#* ----------------------------------------------------------------------------
+#* PMI Nigeria will use results from insecticide resistance monitoring to
+#* influence ITN procurement. Moderate to high levels of pyrethroid 
+#* resistance have been identified over the last two years in two 
+#* entomologic surveillance sites (Ebonyi and Oyo). PMI Nigeria plans to 
+#* procure 1.7 million next-generation or PBO ITNs for Ebonyi State 
+#* (2019 campaign). PMI Nigeria will work closely with PMI to design and 
+#* implement an entomologic and epidemiologic evaluation of these nets. 
+#* In Oyo State, PBO did not fully restore permethrin susceptibility, 
+#* but did for deltamethrin. The next mass campaign in Oyo will occur in 2020
+#* (Rescheduled for 2021 according to Mr. Okoko meeting 8/2020).
+#* PMI Nigeria would like to procure next-generation or deltamethrin-based 
+#* PBO ITNs for Oyo; however, with a need of five million ITNs next 
+#* generation nets would require a subsidy or additional resources.
+#* ---------------------------------------------------------------------------
+#* From: PRESIDENT’S MALARIA INITIATIVE NIGERIA 
+#* Malaria Operational Plan FY 2019
+#* ---------------------------------------------------------------------------
+#* "Acting upon the insecticide resistance data obtained from Ebonyi State, 
+#* PMI plans to deploy PBO ITNs in 2019."
+#* ---------------------------------------------------------------------------
+#* Plans and justification for proposed activities with FY 2019 funding:
+#* ----------------------------------------------------------------------------
+#* "PMI Nigeria will use results from insecticide resistance monitoring to 
+#* influence ITN procurement. Moderate to high levels of pyrethroid resistance 
+#* have been identified over the last two years in two entomologic surveillance 
+#* sites (Ebonyi and Oyo). PMI Nigeria plans to procure 1.7 million 
+#* next-generation or PBO ITNs for Ebonyi State (2019 campaign)."
+#* ****************************************************************************
+
+# Create & set PBO class variable = 0 if PBO nets distributed in 2019 and
+# 1 if PBO nets were not distributed in 2019, indicating that those regions
+# are at higher risk for malaria, therefore, are assigned a higher value
+nga_7_subset_smc_rev_2$PBO_class[nga_7_subset_smc_rev_2$NAME_1 == "Ebonyi"] <- 0
+nga_7_subset_smc_rev_2$PBO_class[nga_7_subset_smc_rev_2$NAME_1 != "Ebonyi"] <- 1
+
+# Create PBO weight
+nga_7_subset_smc_rev_2$pbo_wt <- 0.53
+
+# PBO score calculation
+nga_7_subset_smc_rev_2$pbo_score <- nga_7_subset_smc_rev_2$PBO_class * nga_7_subset_smc_rev_2$pbo_wt # create pbo weighted score 
+
+# Equal wt PBO score calculation
+nga_7_subset_smc_rev_2$pbo_eq_wt_score <- nga_7_subset_smc_rev_2$PBO_class * nga_7_subset_smc_rev_2$eq_wt   #create pbo eq wt score
+
+# Create slim PBO dataset to verify correct variable creation 
+# and value assignment
+# Create slim subset to inspect temp suit class variables
+pbo_vars <- c(1, 3, 4, 84:87)
+pbo_vars_slim <- nga_7_subset_smc_rev_2[pbo_vars]
+View(pbo_vars_slim)
+# n = 13 LGAs have value of 1, which is appropriate
+```
+
+## SMC class data manipulation
+
+```{r}
+
+
+# Create SMC class switch variable (reverse the values so that 1 implies greater -------
+# malaria risk, and 0 implies less malaria risk)
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$SMC_class == 0  ] <- 1
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$SMC_class == 1  ] <- 0
+
+# Added this bit of code after talking to Mr. Okoko - confirming SMC states
+# Change SMC states (change for nga_7 and weighted spdf for final prioritization index)
+# States that received SMC include:
+# Borno         6% coverage
+# Yobe         27% coverage
+# Katsina      26% coverage
+# Jigawa      107% coverage
+# Sokoto      111% coverage
+# Zamfara     114% coverage
+
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$NAME_1 == "Borno"   ] <- 0
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$NAME_1 == "Yobe"    ] <- 0
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$NAME_1 == "Katsina" ] <- 0
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$NAME_1 == "Jigawa"  ] <- 0
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$NAME_1 == "Sokoto"  ] <- 0
+nga_7_subset_smc_rev_2$smc_class_switch [nga_7_subset_smc_rev_2$NAME_1 == "Zamfara" ] <- 0
+```
+
+## SMC score (re)calculations
+
+```{r}
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+# TASK: Consider revising this section or
+# combining it with other SMC section
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!#
+
+# Recalculate smc_score_weighted -----------
+nga_7_subset_smc_rev_2$smc_score_weighted <- nga_7_subset_smc_rev_2$smc_weight_0_82 * nga_7_subset_smc_rev_2$smc_class_switch
+# Check that smc weighted score was calculated correctly - Looks good!
+table(nga_7_subset_smc_rev_2$smc_score_weighted, useNA = "always")
+#  0 0.82 <NA> # consider removing this 
+# 72  703    0 
+# After adding remaining states as SMC states the following
+# results are created
+#   0 0.82 <NA> 
+# 143  632    0
+
+#View slimmed nga_7_subset_smc_rev_2 for verification
+smc_vars_check <- c(1, 3, 4, 49, 50, 94)
+smc_vars_slim_check <- nga_7_subset_smc_rev_2[smc_vars_check]
+View(smc_vars_slim_check)
+
+# Merge smc_vars_slim_check with adm2
+# use this for newest smc map 8-26-20
+nga_7_smc_new.spdf <- merge(adm2.nga, smc_vars_slim_check, by="GID_2", duplicateGeoms = T)
+
+# 8-3-20 convert temp_suit_score back to numeric for re-calculation
+# Will need to run this prior to making final maps
+nga_7_subset_smc_rev_2$temp_suit_score <- as.numeric(nga_7_subset_smc_rev_2$temp_suit_score)
+
+```
+
+# Data management steps
+
+```{r}
+# Bring in new rainfall and covid scores to malaria risk prioritization index
+# convert spdf to data frames
+nga_7_new.df <- as.data.frame(nga_7_new.spdf)
+nga_7_jul21.df <- as.data.frame(nga_7_jul21.spdf)
+
+# Slim datasets
+rf_slim_vars <- c(1, 85)
+nga_rf_slim <- nga_7_new.df[rf_slim_vars]
+View(nga_rf_slim)
+
+covid_slim_vars <- c(1, 136)
+nga_covid_slim <- nga_7_jul21.df[covid_slim_vars]
+View(nga_covid_slim)
+
+# Convert scores back to numeric for weighted score sum
+nga_rf_slim$rf_score <- as.numeric(nga_rf_slim$rf_score)
+nga_covid_slim$COVID_case_score_jul_21_wtd <- as.numeric(nga_covid_slim$COVID_case_score_jul_21_wtd)
+nga_7_subset_smc_rev_2$Built_score <- as.numeric(nga_7_subset_smc_rev_2$Built_score)
+nga_7_subset_smc_rev_2$temp_suit_score <- as.numeric(nga_7_subset_smc_rev_2$temp_suit_score)
+
+# rf_score from nga_7_new.spdf
+# COVID_case_score_jul_21_wtd from nga_7_jul21.spdf
+
+# Merge data sets
+# Calculate scores
+
+# Drop previous variables in nga_7_subset_smc_4_rev_2 that are no longer needed since
+# they have been recalculated 8-27-20
+nga_7_subset_smc_4_rev_3 <- nga_7_subset_smc_rev_2[ -c(21:23, 37:48, 50, 72:77, 88, 93:95, 97) ]
+
+# slim rf and smc dataset then
+rf_newest_slim_vars <- c(1, 3:7)
+rf_newest <- rf_vars_slim[rf_newest_slim_vars]
+View(rf_newest)
+
+newest_smc_vars <- c(1, 16:18)
+smc_newest <- nga_7_smc_new.df[newest_smc_vars]
+View(smc_newest)
+
+# Merge new rainfall(rf_vars_slim) and SMC dataset(nga_7_smc_new) with nga_7_subset_smc_4_rev_3 on 8-27-20
+rf_smc_newest <- merge(x=rf_newest, y=smc_newest, by="GID_2", all = TRUE)
+View(rf_smc_newest)
+
+# Merge rfc_smc_newest with nga_7_subset_smc_4_rev_3
+nga_7_subset_smc_4_rev_4 <- merge(x=rf_smc_newest, y=nga_7_subset_smc_4_rev_3, by="GID_2", all = TRUE)
+View(nga_7_subset_smc_4_rev_4)
+
+# Merge nga_covid_slim with nga_7_subset_smc_4_rev_4
+nga_7_subset_smc_4_rev_5 <- merge(x=nga_covid_slim, y=nga_7_subset_smc_4_rev_4, by="GID_2", all = TRUE)
+View(nga_7_subset_smc_4_rev_5)
+
+# Modify COVID-19 case count variable and -------------------------------------
+# years since last LLIN distribution variable then redo weighted NGA score
+# Remove variables that are no longer necessary (previous COVID-19 case counts)
+# Remove NAME_2.x variable
+
+# slim nga_7_subset_smc_4_rev_5 data set to relevant variables
+# remove irrelevant variables
+nga_7_subset_smc_4_rev_6 <- nga_7_subset_smc_4_rev_5[-c(2, 11, 15:19, 25:27, 30:40, 45, 76)]
+
+# Step: merge covid-19 case count relevant variables with ---------
+# nga_7_subset_smc_4_rev_6 data set
+
+# Slim covid dataset (updated 8-28-20)
+covid_8_28_20_slim.df <- covid_8_28_20.df[-c(1,2,6,7)]
+
+# Re-order columns
+covid_8_28_20_slim.df <- covid_8_28_20_slim.df[,c(6,1,4,2,3,5)]
+
+# Merge nga_7_subset_smc_4_rev_6 with covid_8_28_20_slim.df
+nga_7_subset_smc_4_rev_7 <- merge(x=nga_7_subset_smc_4_rev_6, y=covid_8_28_20_slim.df, by="GID_2", all = TRUE)
+names(nga_7_subset_smc_4_rev_7)
+View(nga_7_subset_smc_4_rev_7)
+
+# slim down nga_7_subset_smc_4_rev_7 data set to examine 
+# number of years since last LLIN distribution variable
+yrs_last_LLIN_8_28_20 <- nga_7_subset_smc_4_rev_7[c(1,11,15)]
+
+# Re-examine nga_7.spdf
+
+# convert nga_7.spdf to df
+nga_7_new.df <- as.data.frame(nga_7.spdf)
+# slim down nga_7_new.df to examine years since last LLIN distrib. variables
+last_llin_8_28_20 <- nga_7_new.df[c(1, 25, 34:36)]
+```
+
+## ITN distribution
+
+```{r}
+# re-categorize the following states that were initi sched for 2020 distrib:
+# Benue, Zamfara, Oyo, Osun, Adamawa, Kwara
+last_llin_8_28_20$ITN_dist_class [last_llin_8_28_20$NAME_1.y == "Benue"   ] <- 2
+last_llin_8_28_20$ITN_dist_class [last_llin_8_28_20$NAME_1.y == "Zamfara" ] <- 2
+last_llin_8_28_20$ITN_dist_class [last_llin_8_28_20$NAME_1.y == "Oyo"     ] <- 2
+last_llin_8_28_20$ITN_dist_class [last_llin_8_28_20$NAME_1.y == "Osun"    ] <- 2
+last_llin_8_28_20$ITN_dist_class [last_llin_8_28_20$NAME_1.y == "Adamawa" ] <- 2
+last_llin_8_28_20$ITN_dist_class [last_llin_8_28_20$NAME_1.y == "Kwara"   ] <- 2
+
+# Create last ITN distribution weight variable
+last_llin_8_28_20$last_itn_distrib_wt <- 0.75
+
+# Update ITN_dist_score
+last_llin_8_28_20$ITN_dist_score <- last_llin_8_28_20$ITN_dist_class * last_llin_8_28_20$last_itn_distrib_wt
+
+# Create ITN_dist_score_factor variable
+last_llin_8_28_20$ITN_dist_score_factor <- as.factor(last_llin_8_28_20$ITN_dist_score)
+
+# Slim last_llin_8_28_20 data set to relevant variables prior to merge with
+# nga_7_subset_smc_4_rev_7
+last_llin_8_28_20_slim <- last_llin_8_28_20[c(1,3,4,5,6,7)]
+
+# Remove previous last LLIN distribution related variables
+nga_7_subset_smc_4_rev_8 <- nga_7_subset_smc_4_rev_7[-c(14:17)]
+
+# Merge nga_7_subset_smc_4_rev_8 with last_llin_8_28_20_slim
+nga_7_subset_smc_4_rev_9 <- merge(x=nga_7_subset_smc_4_rev_8, y=last_llin_8_28_20_slim, by="GID_2", all = TRUE)
+names(nga_7_subset_smc_4_rev_9)
+View(nga_7_subset_smc_4_rev_9)
+```
+
+## COVID score 
+
+```{r}
+
+# Create covid_case_score_wtd_numeric 
+nga_7_subset_smc_4_rev_9$covid_case_score_wtd_numeric <- as.numeric(nga_7_subset_smc_4_rev_9$covid_case_score_wtd)
+
+```
+
+## Create final weighted scores
+
+```{r}
+
+#----------------------------------------------------------------------------------
+# create final (weighted) NGA score -----------------------------------------------
+#----------------------------------------------------------------------------------
+nga_7_subset_smc_4_rev_9$weighted_score_sum <- nga_7_subset_smc_4_rev_9$rf_score + # Note This comes from dataset rf_vars_slim
+    # now that rainfall data was re-calculated/redone after removing neg numbers on 8-27-20
+    nga_7_subset_smc_4_rev_9$Built_score +        # OK
+    nga_7_subset_smc_4_rev_9$smc_score_weighted + # OK
+    nga_7_subset_smc_4_rev_9$covid_case_score_wtd_numeric + # updated on 8-28-20 
+    nga_7_subset_smc_4_rev_9$weighted_net_avlblty_complement_score + # OK
+    nga_7_subset_smc_4_rev_9$Disruptive_event_score + # OK
+    nga_7_subset_smc_4_rev_9$ITN_dist_score +     # OK
+    nga_7_subset_smc_4_rev_9$temp_suit_score +    # OK
+    nga_7_subset_smc_4_rev_9$pbo_score            # OK
+
+# Create factor variable for score sum for mapping
+nga_7_subset_smc_4_rev_9$weighted_score_sum_factor <- as.factor(nga_7_subset_smc_4_rev_9$weighted_score_sum)
+
+# Visualize variables in nga_7_subset_smc_4_rev_9
+names(nga_7_subset_smc_4_rev_9)
+```
+
+## Create equally weighted scores
+
+```{r}
+#-------------------------------------------------------------------------
+# Create equally weighed scores that weren't created previously-----------
+# Note: Modified on 8-29-20
+#-------------------------------------------------------------------------
+# 
+# # 1) smc_score_eq_weighted - ok
+# nga_7_subset_smc_4_rev_9$smc_score_eq_weighted <- nga_7_subset_smc_4_rev_9$eq_wt * nga_7_subset_smc_4_rev_5$smc_class_switch
+# 2) net availability eq wt score - ok
+nga_7_subset_smc_4_rev_9$eq_wt_net_avlblty_complement_score <- nga_7_subset_smc_4_rev_9$eq_wt * nga_7_subset_smc_4_rev_9$net_avlblty_complement_class
+# 3) COVID-19 equal wt score - ok
+nga_7_subset_smc_4_rev_9$COVID_case_eq_wt_score <- nga_7_subset_smc_4_rev_9$eq_wt * nga_7_subset_smc_4_rev_9$COVID_class_aug_28
+# 4) internally displaced pop equal wt score
+nga_7_subset_smc_4_rev_9$idp_eq_wt_score      [nga_7_subset_smc_4_rev_9$Disruptive_event_score == 0.4] <- 0.5
+nga_7_subset_smc_4_rev_9$idp_eq_wt_score      [nga_7_subset_smc_4_rev_9$Disruptive_event_score != 0.4] <- 0
+# 5) itn distribution equal wt score
+nga_7_subset_smc_4_rev_9$itn_dist_eq_wt_score [nga_7_subset_smc_4_rev_9$ITN_dist_score == 0.75  ] <- 0.5  # 1 x wt
+nga_7_subset_smc_4_rev_9$itn_dist_eq_wt_score [nga_7_subset_smc_4_rev_9$ITN_dist_score == 1.5   ] <- 1   # 2 x wt
+nga_7_subset_smc_4_rev_9$itn_dist_eq_wt_score [nga_7_subset_smc_4_rev_9$ITN_dist_score == 2.25  ] <- 1.5   # 3 x wt
+nga_7_subset_smc_4_rev_9$itn_dist_eq_wt_score [nga_7_subset_smc_4_rev_9$ITN_dist_score == 3     ] <- 2     # 4 x wt
+# 6) smc eq wt score (same calc as above but different variable name)
+nga_7_subset_smc_4_rev_9$smc_eq_wt_score <- nga_7_subset_smc_4_rev_9$eq_wt * nga_7_subset_smc_4_rev_9$smc_class_switch
+# 7) rf_eq_weighted score (using 8/29/20 corrected rainfall layer)
+nga_7_subset_smc_4_rev_9$rf_eqwt_score <- nga_7_subset_smc_4_rev_9$eq_wt * nga_7_subset$rf_class
+# 8) Equal wt PBO score calculation
+nga_7_subset_smc_4_rev_9$pbo_eq_wt_score <- nga_7_subset_smc_4_rev_9$PBO_class * nga_7_subset_smc_4_rev_9$eq_wt     #create pbo eq wt score
+# 9) Equal wt Built score calculation
+nga_7_subset_smc_4_rev_9$Built_eq_wt_score <- nga_7_subset_smc_4_rev_9$Built_class * nga_7_subset_smc_4_rev_9$eq_wt #create built eq wt score
+# 10) temp suitability
+nga_7_subset_smc_4_rev_9$temp_suit_eq_wt_score <- nga_7_subset_smc_4_rev_9$temp_suit_class * nga_7_subset_smc_4_rev_9$eq_wt   #create temp suitability eq wt score
+
+#---------------------------------------------------------------------------
+# slim nga_7_subset_smc_rev_2 data set to examine equal wt score creation
+#---------------------------------------------------------------------------
+# Create slim subset to inspect temp suit class variables
+# wt should be 0.75 for use in weighted score
+#itn dist
+itn_dist_vars <- c(1, 3, 4, 13, 14, 15, 70, 92 )
+itn_dist_vars_slim <- nga_7_subset_smc_rev_2[itn_dist_vars]
+View(itn_dist_vars_slim)
+#smc
+smc_vars <- c(1, 3, 4, 21, 22, 23, 49, 50, 88, 93, 94 )
+smc_vars_slim <- nga_7_subset_smc_rev_2[smc_vars]
+View(smc_vars_slim)
+#rainfall
+rf_vars <- c(1, 3, 72:76 )
+rf_vars_slim <- nga_7_subset_smc_rev_2[rf_vars]
+View(rf_vars_slim)
+#net availability
+net_avail_vars <- c(1, 3, 53, 61:64, 96 )
+net_avail_vars_slim <- nga_7_subset_smc_rev_2[net_avail_vars]
+View(net_avail_vars_slim)
+#temp suitability
+temp_vars <- c(1, 3, 78:82 )
+temp_vars_slim <- nga_7_subset_smc_rev_2[temp_vars]
+View(temp_vars_slim)
+# built
+built_vars <- c(1, 3, 55,65:71)
+built_vars_slim <- nga_7_subset_smc_rev_2[built_vars]
+View(built_vars_slim)
+# pbo
+pbo_vars <- c(1, 3, 55,83:87)
+pbo_vars_slim <- nga_7_subset_smc_rev_2[pbo_vars]
+View(pbo_vars_slim)
+# COVID
+covid_vars <- c(1, 3, 16, 17, 18, 51, 52, 90)
+covid_vars_slim <- nga_7_subset_smc_rev_2[covid_vars]
+View(covid_vars_slim)
+# IDP
+idp_vars <- c(1, 3, 19, 20, 91)
+idp_vars_slim <- nga_7_subset_smc_rev_2[idp_vars]
+View(idp_vars_slim)
+
+# Dbl check indicator score calculations per TA's comments ----------------
+# 1) SMC-       weighted (0.82) and equally weighted (0.5) - OK (0/1 binary)
+# 2) RF -       weighted (0.78) and equally weighted (0.5) - OK
+# 3) net avail- weighted (0.75) and equally weighted (0.5) - OK
+# 4) ITN dist - weighted (0.75) and equally weighted (0.5) - OK
+# 8) temp suit- weighted (0.58) and equally weighted (0.5) - OK
+# 5) built -    weighted (0.54) and equally weighted (0.5) - OK
+# 9) PBO -      weighted (0.53) and equally weighted (0.5) - OK (0/1 binary)
+# 3) IDP -      weighted (0.40) and equally weighted (0.5) - OK (0/1 binary)
+# 7) COVID -    weighted (0.28) and equally weighted (0.5) - OK
+
+# convert factor to numeric
+# nga_7_subset_smc_rev_2$temp_suit_eq_wt_score <- as.numeric(nga_7_subset_smc_rev_2$temp_suit_eq_wt_score)    # OK
+    
+```
+
+## Create final unweighted scores
+
+```{r}
+
+# 8-4-20 need to recalculate these scores after sending weighted scores
+# list to Alyssa
+# create final (unweighted) NGA score --------------------------------------
+nga_7_subset_smc_4_rev_9$eq_weighted_score_sum <- nga_7_subset_smc_4_rev_9$rf_eqwt_score + # OK
+    nga_7_subset_smc_4_rev_9$Built_eq_wt_score +         # OK
+    nga_7_subset_smc_4_rev_9$COVID_case_eq_wt_score +    # OK             
+    nga_7_subset_smc_4_rev_9$eq_wt_net_avlblty_complement_score +  #OK
+    nga_7_subset_smc_4_rev_9$idp_eq_wt_score + # OK # note renamed this "idp" vs disrupt.event
+    nga_7_subset_smc_4_rev_9$itn_dist_eq_wt_score +      # OK                   
+    nga_7_subset_smc_4_rev_9$smc_eq_wt_score +           # OK              
+    nga_7_subset_smc_4_rev_9$temp_suit_eq_wt_score +     # OK
+    nga_7_subset_smc_4_rev_9$pbo_eq_wt_score             # OK
+    
+# range of weighted score sum
+summary(nga_7_subset_smc_4_rev_9$weighted_score_sum)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 5.29    9.01   10.30   10.50   12.23   15.79 
+# New range of weighted score sum as of 8-27-20
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 6.97   10.37   12.07   12.49   14.69   19.88 
+#----------------------------------------------------
+# Newest range of weighted score sum as of 8-27-20
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 6.43   10.54   12.82   12.63   14.82   19.85 
+#----------------------------------------------------
+
+# range of equally weighted score sum
+summary(nga_7_subset_smc_4_rev_9$eq_weighted_score_sum)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 5.500   8.500   9.500   9.665  11.000  14.500 
+# revised equally weighted summary as of 8-5-20
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 7.19   11.51   12.76   13.05   14.76   20.76 
+#----------------------------------------------------
+# revised equally weighed summary on 8-29-20
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 4.500   7.500   8.000   8.335   9.500  12.000 
+#----------------------------------------------------
+
+```
+
+## Jenks / natural breaks for final weighted NGA score sum
+
+```{r}
+
+# jenks for final weighted NGA score sum (updated 8-27-20) ---------------------------
+getJenksBreaks(nga_7_subset_smc_4_rev_9$weighted_score_sum, 7, subset = NULL)  
+# [1]  6.43  9.29 11.50 13.34 15.07 17.07 19.85
+
+# rename final risk prioritization data set
+prioritization.df <- nga_7_subset_smc_4_rev_9
+
+```
+
+## Create malaria (weighted) risk categories
+
+```{r}
+
+# Create nga malaria risk category (for weighted table)
+prioritization.df$Malaria_risk[prioritization.df$weighted_score_sum >= 17.07 ] <- 6
+prioritization.df$Malaria_risk[prioritization.df$weighted_score_sum >= 15.07 & prioritization.df$weighted_score_sum < 17.07 ] <- 5    # 
+prioritization.df$Malaria_risk[prioritization.df$weighted_score_sum >= 13.34 & prioritization.df$weighted_score_sum < 15.07 ] <- 4    # 
+prioritization.df$Malaria_risk[prioritization.df$weighted_score_sum >= 11.50 & prioritization.df$weighted_score_sum < 13.34 ] <- 3    # 
+prioritization.df$Malaria_risk[prioritization.df$weighted_score_sum >= 9.29  & prioritization.df$weighted_score_sum < 11.50 ] <- 2    # 
+prioritization.df$Malaria_risk[prioritization.df$weighted_score_sum >= 6.43  & prioritization.df$weighted_score_sum < 9.29  ] <- 1    # 
+
+# Make malaria risk category a factor variable for chloropleth maps
+prioritization.df$Malaria_risk_factor <- as.factor(prioritization.df$Malaria_risk)
+
+# Verify no missing values for malaria risk factor variable -----
+table(prioritization.df$Malaria_risk_factor, useNA = "always")
+# 1    2    3    4    5    6 <NA> 
+# 122  154  185  156  108   50    0 
+
+# # distribution of equally weighted score sums (modified 8-5-20) ----------
+# table(nga_7_subset_smc_rev_9$eq_weighted_score_sum, useNA = "always")
+# # 5.5    6  6.5    7  7.5    8  8.5    9  9.5   10 10.5   11 11.5   12 12.5   13 13.5   14 14.5 
+# #   1   18   13   36   40   60   77  116   80   80   44   37   51   39   42   20    7    8    6 
+
+# Distribution of equally weighted score sum (modified 8-29-20)----------------------
+table(prioritization.df$eq_weighted_score_sum, useNA = "always")
+# 4.5    5  5.5    6  6.5    7  7.5    8  8.5    9  9.5   10 10.5   11 11.5   12 <NA> 
+#   1   15   15   14   43   68  108  135  100   80   66   43   46   28   11    2    0 
+
+```
+
+## Jenks / natural breaks for equally weighted score sum
+
+```{r}
+
+# jenks for final equally weighted NGA score sum ---------------------------
+getJenksBreaks(prioritization.df$eq_weighted_score_sum, 7, subset = NULL)  
+# [1]  5.5  7.0  8.5  9.5 10.5 12.0 14.5 (previous jenks)
+# [1]  4.5  6.0  7.0  8.0  9.0 10.0 12.0 (modified jenks on 8-29-20)
+
+# Create nga malaria risk category (for equally weighted table)
+prioritization.df$Malaria_risk_eq_wt[prioritization.df$eq_weighted_score_sum >= 10 ] <- 6
+prioritization.df$Malaria_risk_eq_wt[prioritization.df$eq_weighted_score_sum >= 9.0  & prioritization.df$eq_weighted_score_sum < 10  ] <- 5   
+prioritization.df$Malaria_risk_eq_wt[prioritization.df$eq_weighted_score_sum >= 8.0  & prioritization.df$eq_weighted_score_sum < 9.0 ] <- 4  
+prioritization.df$Malaria_risk_eq_wt[prioritization.df$eq_weighted_score_sum >= 7.0  & prioritization.df$eq_weighted_score_sum < 8.0 ] <- 3   
+prioritization.df$Malaria_risk_eq_wt[prioritization.df$eq_weighted_score_sum >= 6.0  & prioritization.df$eq_weighted_score_sum < 7.0 ] <- 2     
+prioritization.df$Malaria_risk_eq_wt[prioritization.df$eq_weighted_score_sum >= 4.5  & prioritization.df$eq_weighted_score_sum < 6.0 ] <- 1    
+```
+
+## Data management steps
+
+```{r}
+# spot check distribution of equally weighted ---------------
+table(prioritization.df$Malaria_risk_eq_wt, useNA = "always")
+# something is not right here
+#  1    2    3    4    5    6 <NA> 
+# 31   57  176  235  146  130    0 
+
+# spot check distribution of weighted------------------------
+table(prioritization.df$Malaria_risk, useNA = "always")
+# something is not right here
+#   1    2    3    4    5    6 <NA> 
+# 122  154  185  156  108   50    0 
+
+#------------------------------------------------------------------------------------
+# NOTE: NEED TO CHANGE THESE BACK TO NUMERIC (or factor) 
+# IF MAKE ANOTHER PRIORITIZATION MAP
+#------------------------------------------------------------------------------------
+
+# Make equally weighted malaria risk category a factor variable for chloropleth maps
+prioritization.df$Malaria_risk_eq_wt_factor <- as.factor(prioritization.df$Malaria_risk_eq_wt)
+# Make built_score a factor variable
+prioritization.df$Built_score <- as.factor(prioritization.df$Built_score)
+# Make COVID_case_score_wtd a factor variable
+prioritization.df$COVID_case_score_wtd <- as.factor(prioritization.df$COVID_case_score_wtd)
+# Make weighted_net_avlblty_complement_score a factor variable
+prioritization.df$weighted_net_avlblty_complement_score_factor <- as.factor(prioritization.df$weighted_net_avlblty_complement_score)
+# Make pbo a factor variable
+prioritization.df$pbo_score_factor <- as.factor(prioritization.df$pbo_score)
+
+# Merge adm2.nga with nga_7 dataset by NAME_2 ---------------------------
+# nga_master7 <- merge(adm2.nga, nga_master6, by="NAME_2", all = TRUE)
+
+# Code added to include additional states receiving SMC after discussion with
+# Mr. Okoko on 8-29-20
+
+#---------------------------------------------------
+# USE THIS OBJECT FOR MAPS 
+#---------------------------------------------------
+nga_7_8_29_20.spdf <- merge(adm2.nga, prioritization.df, by="GID_2", duplicateGeoms = T)
+
+# Make nga_7.spdf a dataframe for closer inspection of n=775 elements
+nga_7_8_29_20.df <- as.data.frame(nga_7_8_29_20.spdf)
+# Note: GID_2 has 775 unique obs while NAME_2 has 770 unique obs. n =5 have duplicate names
+# Bassa (2 entries), Irepodun (2 entries), Obi (2 entries), Ifelodun (2 entries),
+# Surulere (2 entries)
+
+# -----------------------------------------------------------------
+# -----------------------------------------------------------------
+View(nga_7_8_29_20.df) # use this data set as master as of 8-29-20
+# -----------------------------------------------------------------
+# -----------------------------------------------------------------
+
+# Export weighted table for report -----------------
+table_vars <- c(1, 5, 7, 77, 83 )
+nga_7_8_29_20_slim.df <- nga_7_8_29_20.df[table_vars]
+View(nga_7_8_29_20_slim.df)
+# Create extra columns
+nga_7_8_29_20_slim.df$Risk_Category <- nga_7_8_29_20_slim.df$Malaria_risk_factor
+nga_7_8_29_20_slim.df$Prioritization_Level [nga_7_8_29_20_slim.df$Malaria_risk_factor == 6 ] <- "Extrememly high"
+nga_7_8_29_20_slim.df$Prioritization_Level [nga_7_8_29_20_slim.df$Malaria_risk_factor == 5 ] <- "High"
+nga_7_8_29_20_slim.df$Prioritization_Level [nga_7_8_29_20_slim.df$Malaria_risk_factor == 4 ] <- "Moderate high"
+nga_7_8_29_20_slim.df$Prioritization_Level [nga_7_8_29_20_slim.df$Malaria_risk_factor == 3 ] <- "Moderate"
+nga_7_8_29_20_slim.df$Prioritization_Level [nga_7_8_29_20_slim.df$Malaria_risk_factor == 2 ] <- "Moderate low"
+nga_7_8_29_20_slim.df$Prioritization_Level [nga_7_8_29_20_slim.df$Malaria_risk_factor == 1 ] <- "Low"
+
+# Change name of NAME_1.x to "State" ------------------------
+nga_7_8_29_20_slim.df$State <- nga_7_8_29_20_slim.df$NAME_1.x
+# Rename NAME_2.x variable to "LGA" -------------------------
+nga_7_8_29_20_slim.df$LGA <- nga_7_8_29_20_slim.df$NAME_2.x
+View(nga_7_8_29_20_slim.df)
+# Drop unnecessary variables
+nga_7_8_29_20_slim_2.df <- nga_7_8_29_20_slim.df[c(1,6,7,4,8,9)]
+View(nga_7_8_29_20_slim_2.df)
+
+# Convert factor to numeric for sorting -------------
+nga_7_8_29_20_slim_2.df$Risk_Category <- as.numeric(nga_7_8_29_20_slim_2.df$Risk_Category)
+# Sort by Risk category
+nga_7_8_29_20_slim_2_sorted.df <- nga_7_8_29_20_slim_2.df[order(-nga_7_8_29_20_slim_2.df$Risk_Category),]    
+View(nga_7_8_29_20_slim_2_sorted.df)
+
+# Export table weighted scores, prioritization category, population
+# for Alyssa on 8-29-20
+write.csv(nga_7_8_29_20.df, "/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/nga_7_8_29_20.df.csv", row.names = TRUE)
+write.csv(nga_7_8_29_20_slim_2_sorted.df, "/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/nga_7_8_29_20_slim_2_sorted.df.csv", row.names = TRUE) # exported on 8-29-20 @ 2050 hrs PST
+# 
+# # Rename variables
+# nga_7_slim.df$Risk_category <- nga_7_slim.df$Malaria_risk_factor
+# # drop Malaria_risk_factor
+# table_vars_2 <- c(1, 2, 3, 4, 6)
+# nga_7_slim_2.df <- nga_7_slim.df[table_vars_2]
+# View(nga_7_slim_2.df)
+
+# # Convert factor to numeric for sorting -------------
+# nga_7_slim_2.df$Risk_category <- as.numeric(nga_7_slim_2.df$Risk_category)
+# # Sort by Risk category
+# nga_7_slim_2_sorted.df <- nga_7_slim_2.df[order(-nga_7_slim_2.df$Risk_category),]    
+# View(nga_7_slim_2_sorted.df)
+
+# # Rename Variables
+# nga_7_slim_2_sorted.df$State <- nga_7_slim_2_sorted.df$NAME_1.x
+# nga_7_slim_2_sorted.df$LGA <- nga_7_slim_2_sorted.df$NAME_2.x
+# View(nga_7_slim_2_sorted.df)
+
+# # Keep relevant variables
+# table_vars_3 <- c(1, 4, 5, 6, 7)
+# nga_7_slim_3_sorted.df <- nga_7_slim_2_sorted.df[table_vars_3]
+# View(nga_7_slim_3_sorted.df)
+# # Reorder variables
+# table_vars_4 <- c(1,4,5,2,3)
+# nga_7_slim_4_sorted.df <- nga_7_slim_3_sorted.df[table_vars_4]
+# View(nga_7_slim_4_sorted.df)
+
+#---------------------------------------------
+# export weighted prioritization table to manipulate 
+# in excel and paste into word document (exported on 8-29-20)
+#---------------------------------------------
+# write.csv(nga_7_slim_4_sorted.df,"/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/nga_7_slim_4_sorted_df_v2.csv", row.names = TRUE)
+# write.csv(nga_7_8_29_20_slim.df, "/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/nga_7_8_29_20_slim_df.csv", row.names = TRUE)
+
+# export nga_7.df to csv for Alyssa to use for budgeting 7-23-20
+# Re-exported on 8-5-20 for Alyssa budget
+# write.csv(nga_7.df, "/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/nga_7_df.csv", row.names = TRUE)
+
+#---------------------------------------------
+# Export equally weighted table for report ---
+#---------------------------------------------
+table_eq_wt_vars <- c(1, 5, 7, 81, 84)
+eq_wt.df <- nga_7_8_29_20.df[table_eq_wt_vars]
+View(eq_wt.df) # dataset numbers look good
+
+# rename variables -------
+eq_wt.df$Risk_category <- eq_wt.df$Malaria_risk_eq_wt
+# drop Malaria_risk_factor
+table_eq_wt_vars_2 <- c(1, 2, 3, 4, 6)
+eq_wt_slim.df <- eq_wt.df[table_eq_wt_vars_2]
+View(eq_wt_slim.df)
+
+# spot check -------
+table(eq_wt_slim.df$Risk_category, useNA = "always")
+# Former distribution of risk categories
+#  1    2    3    4    5    6 <NA> 
+# 32  136  193  160  132  122    0 
+# Distribution of risk categories as of 8-29-20
+#  1    2    3    4    5    6 <NA> 
+# 31   57  176  235  146  130    0 
+
+# convert to numeric for sorting
+# eq_wt_slim.df$Risk_category <- as.numeric(eq_wt_slim.df$Risk_category)
+
+# Sort by risk category ------------
+eq_wt_slim_sorted.df <- eq_wt_slim.df[order(-eq_wt_slim.df$Risk_category),]
+
+```
+
+## Assign prioritization levels to risk categroies (equally weighted)
+
+```{r}
+
+# Assign Prioritization level to risk category (equally weighted)
+# eq_wt_slim_sorted.df$Risk_category[eq_wt_slim_sorted.df$Risk_category == "Extremely high"] <- 6
+eq_wt_slim_sorted.df$Prioritization_level[eq_wt_slim_sorted.df$Risk_category == 6] <- "Extremely high"
+eq_wt_slim_sorted.df$Prioritization_level[eq_wt_slim_sorted.df$Risk_category == 5] <- "High"
+eq_wt_slim_sorted.df$Prioritization_level[eq_wt_slim_sorted.df$Risk_category == 4] <- "Moderate high"
+eq_wt_slim_sorted.df$Prioritization_level[eq_wt_slim_sorted.df$Risk_category == 3] <- "Moderate"
+eq_wt_slim_sorted.df$Prioritization_level[eq_wt_slim_sorted.df$Risk_category == 2] <- "Moderate low"
+eq_wt_slim_sorted.df$Prioritization_level[eq_wt_slim_sorted.df$Risk_category == 1] <- "Low"
+
+# Spot check
+names(eq_wt_slim_sorted.df)
+# [1] "GID_2"                "NAME_1.x"             "NAME_2.x"             "Risk_category"        "Prioritization_level"
+head(eq_wt_slim_sorted.df)
+# GID_2 NAME_1.x          NAME_2.x Risk_category Prioritization_level
+# 1  NGA.1.1_1     Abia         Aba North             6       Extremely high
+# 10 NGA.1.2_1     Abia         Aba South             6       Extremely high
+# 11 NGA.1.3_1     Abia          Arochukw             6       Extremely high
+# 12 NGA.1.4_1     Abia             Bende             6       Extremely high
+# 13 NGA.1.5_1     Abia           Ikwuano             6       Extremely high
+# 14 NGA.1.6_1     Abia Isiala Ngwa North             6       Extremely high
+table(eq_wt_slim_sorted.df$Risk_category, useNA = "always")
+# Previous risk category distribution
+#  1    2    3    4    5    6 <NA>  # looks good
+# 32  136  193  160  132  122    0 
+# Risk category distribution as of 8-29-20
+#  1    2    3    4    5    6 <NA> 
+# 31   57  176  235  146  130    0 
+
+table(eq_wt_slim_sorted.df$Prioritization_level, useNA = "always")
+# Extremely high           High            Low       Moderate  Moderate high   Moderate low           <NA> 
+#     130            146             31            176            235             57              0 
+
+```
+
+## Data management
+
+```{r}
+# Rename variable names
+eq_wt_slim_sorted.df$State <- eq_wt_slim_sorted.df$NAME_1.x
+eq_wt_slim_sorted.df$LGA <- eq_wt_slim_sorted.df$NAME_2.x
+eq_wt_slim_sorted.df$Unweighted_score <- eq_wt_slim_sorted.df$eq_weighted_score_sum
+
+head(eq_wt_slim_sorted.df)
+
+# Reorder variables and remove duplicates
+eq_weighted_vars_8_29_20 <- c(1,8,9,7,5,6)
+eq_wt_slim_sort_2.df <- eq_wt_slim_sorted.df[eq_weighted_vars_8_29_20]
+
+# spot check
+table(eq_wt_slim_sort_2.df$Risk_category)
+# 1   2   3   4   5   6 
+# 31  57 176 235 146 130 
+
+table(eq_wt_slim_sort_2.df$Prioritization_level)
+# Extremely high           High            Low       Moderate  Moderate high   Moderate low 
+#            130            146             31            176            235             57 
+
+# View equally weighted dataset
+View(eq_wt_slim_sort_2.df)
+
+# Sort by Risk category
+# nga_7_slim_2_sorted.df <- nga_7_slim_2.df[order(-nga_7_slim_2.df$Risk_category),]    
+ # View(nga_7_slim_2_sorted.df)
+
+# Export table to manipulate in excel and paste into word document
+# Note: Exported on 8-29-20
+write.csv(eq_wt_slim_sort_2.df,"/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/eq_wt_slim_sort_2_8_29_20.csv", row.names = TRUE)
+
+# merge equally weighted dataset with -----------------------------------------
+# adm2.nga to create spdf or convert to sf
+eq_weighted_8_29_20.spdf <- merge(adm2.nga, eq_wt_slim_sort_2.df, by="GID_2", duplicateGeoms = T)
+
+# convert risk category to factor (unweighted) ----------
+eq_weighted_8_29_20.spdf$Risk_category <- as.factor(eq_weighted_8_29_20.spdf$Risk_category)
+
+#----------------------------------------------------------------------------
+# Make  spatial data frame of weighted data set -----------------------------
+# merge weighted dataset with adm2.nga to verify mapping ----------
+weighted.spdf <- merge(adm2.nga, nga_7_8_29_20_slim_2_sorted.df, by="GID_2", duplicateGeoms = T)
+
+# convert risk category to factor (weighted) on 8-29-20 ----------
+weighted.spdf$Risk_Category <- as.factor(weighted.spdf$Risk_Category)
+
+# spot check
+table(weighted.spdf$Risk_Category, useNA = "always")
+# Previous distribution of weighted risk category
+#   1    2    3    4    5    6 <NA> 
+# 172  156  170   95  114   68    0 
+
+# Distribution of weighted risk category as of 8-29-20
+#   1    2    3    4    5    6 <NA> 
+# 122  154  185  156  108   50    0 
+```
+
+## Create weighted prioritization / malaria risk map
+
+###!Consider revising this title to "malaria intervention prioritization map"!
+###! or something like that!
+
+```{r}
+#---------------------------------------------------------------------------
+# --------------------------------------------------------------------------
+# 1a) Create Weighted Priortization/Malaria Risk map -----------------------
+# Status: complete on 7-21-20
+# Note: Recreated on 8-4-20?
+# Note: Modified on 8-29-20
+# --------------------------------------------------------------------------
+# create custom color palette
+# magma <- viridisLite::magma(6)
+# plasma <- viridisLite::plasma(6)
+# inferno <- viridisLite::inferno(6)
+
+# make map within plot window for check
+# tm_shape(weighted.spdf) +
+#     tm_fill("Risk_Category", title = "Nigeria Priority Areas", n = 6, style = "cat",
+#             palette = "Blues", 
+#             labels = c("Low", "Moderate Low", "Moderate", "Moderate High", "High", "Extremely High"))  + 
+#     tm_polygons("GID_2", lwd = 0.25, col = "gray3", border.col = "grey50")  +
+#     tm_scale_bar() + tm_compass(position = c("RIGHT","TOP")) +
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+#     tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+
+
+
+# Assign map above to object (grey50 border color and grey50 tm_borders)
+nga_prioritization_map_blue_factor_legend_pos <- tm_shape(weighted.spdf) +
+    tm_fill("Risk_Category", title = "Nigeria Priority Areas", n = 6,
+            style = "cat", palette = "Blues",
+            labels = c("Low", "Moderate Low", "Moderate",
+                      "Moderate High", "High", "Extremely High"))  +
+    tm_polygons("GID_2", lwd = 0.10, col = "gray3", border.col = "grey50")  +
+    tm_scale_bar() + tm_compass(position = c("RIGHT","TOP")) +
+    tm_layout(frame = FALSE, legend.outside = FALSE,
+              legend.position = c(0.75,0.10), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.35)
+
+# Save weighted prioritization map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\prioritization weighted") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/prioritization weighted") # Mac
+# tmap_save(nga_prioritization_map, "nga_prioritization_map.png",
+#           width =6.78, height=5, units ='in', asp = 0)
+tmap_save(nga_prioritization_map_blue_factor_legend_pos, "nga_prioritization_map_blue_factor_legend_pos_v5.png",
+          width =6.78, height=5, units ='in', asp = 0)
+```
+
+### Create equally weighted prioritization / malaria risk map
+
+```{r}
+
+
+# --------------------------------------------------------------------------
+# 1b) Create Equally weighted Prioritization/Malaria Risk map ---------------
+# Status: complete on 7-21-20
+# Note: recreated on 8-29-20
+# --------------------------------------------------------------------------
+# 
+# # make map within plot window for check
+# tm_shape(eq_weighted_8_29_20.spdf) +
+#     tm_fill("Risk_category", title = "Nigeria Priority Areas", n = 6, style = "cat",
+#             palette = "Purples", labels = c("Low", "Moderate Low", "Moderate", "Moderate High", "High", "Extremely High"))  + 
+#     tm_polygons("GID_2", lwd = 0.25, col = "gray3", border.col = "grey50")  +
+#     tm_scale_bar() + tm_compass(position = c("RIGHT","TOP")) +
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+#     tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+
+# Assign map above to object (grey50 border color and grey50 tm_borders)
+nga_prioritization_eq_wt_map <- tm_shape(eq_weighted_8_29_20.spdf) +
+    tm_fill("Risk_category", title = "Nigeria Priority Areas", n = 6, style = "cat",
+            palette = "Purples",
+            labels = c("Low", "Moderate Low", "Moderate",
+                       "Moderate High", "High", "Extremely High"))  + 
+    tm_polygons("GID_2", lwd = 0.30, col = "gray3", border.col = "grey50")  +
+    tm_scale_bar() + tm_compass(position = c("RIGHT","TOP")) +
+    tm_layout(frame = FALSE, legend.outside = FALSE,
+              legend.position = c(0.75,0.10), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.50)
+
+# Save weighted prioritization map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\prioritization weighted") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/prioritization equally weighted") # Mac
+tmap_save(nga_prioritization_eq_wt_map, "nga_prioritization_eq_wt_map_v3.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+#------------------------------------------------------------------------------
+# 8-29-20 Create spdf for master dataset for input maps
+master_8_29_20.spdf <- merge(adm2.nga, nga_7_8_29_20.df, 
+                             by="GID_2", duplicateGeoms = T)
+#------------------------------------------------------------------------------
+
+```
+
+## Create temperature suitability index map
+
+```{r}
+# --------------------------------------------------------------------------
+# 1c) Create temperature suitabilty index map ------------------------------
+# Status: complete on 7-21-20
+# --------------------------------------------------------------------------
+
+# create custom color palette
+YlOrBr <- get_brewer_pal("YlOrBr", n = 4)
+# PuRd <- get_brewer_pal("YlGnBu", n = 4, contrast = c(0, 0.42))
+
+# make map within plot window for check
+# tm_shape(nga_8.spdf) +
+#     tm_fill("Built_score", title = "Built up area\npresence index", n = 4, style = "cat",
+#             palette = PuRd, labels = c("Very high", "High", "Moderate", "Low"))  + 
+#     tm_polygons("GID_2", lwd = 0.25, col = "gray3", border.col = "grey50")  +
+#     tm_scale_bar() + 
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+#     tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+
+# Assign map above to object (grey50 border color and grey50 tm_borders)
+temp_suit_map <- tm_shape(nga_7.spdf) +
+    tm_fill("temp_suit_score", title = "P.f.\ntemperature\nsuitability\nindex", n = 4, style = "cat",
+            palette = YlOrBr, labels = c("Low", "Moderate", "High", "Very high"))  + 
+    tm_polygons("GID_2", lwd = 0.10, col = "gray3", border.col = "grey50")  +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.35)
+
+# try confirmation map for temp suit using master_8_29_20.spdf
+temp_suit_map <- tm_shape(master_8_29_20.spdf) +
+    tm_fill("temp_suit_score", title = "P.f.\ntemperature\nsuitability\nindex", n = 4, style = "cat",
+            palette = YlOrBr, labels = c("Low", "Moderate", "High", "Very high"))  + 
+    tm_polygons("GID_2", lwd = 0.10, col = "gray3", border.col = "grey50")  +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.35)
+
+# Save Built up presence map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\built") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/temp suitability")
+tmap_save(temp_suit_map, "temp_suit_map_8_29_20.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create built up presence map
+
+```{r}
+
+# --------------------------------------------------------------------------
+# 1d) Create Built up presence map -----------------------------------------
+# Status: complete on 7-21-20
+# --------------------------------------------------------------------------
+
+# create custom color palette
+YlGnBu <- get_brewer_pal("YlGnBu", n = 4, contrast = c(0, 0.42))
+
+# make map within plot window for check
+# tm_shape(nga_7.spdf) +
+#     tm_fill("Built_score", title = "Built up area\npresence index", n = 4, style = "cat",
+#             palette = PuRd, labels = c("Very high", "High", "Moderate", "Low"))  + 
+#     tm_polygons("GID_2", lwd = 0.25, col = "gray3", border.col = "grey50")  +
+#     tm_scale_bar() + 
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+#     tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+
+# Assign map above to object (grey50 border color and grey50 tm_borders)
+nga_built_wtd_map <- tm_shape(master_8_29_20.spdf) +
+    tm_fill("Built_score", title = "Built up\npresence\nindex", n = 4, style = "cat",
+            palette = YlGnBu, labels = c("Very high", "High", "Moderate", "Low"))  + 
+    tm_polygons("GID_2", lwd = 0.10, col = "gray3", border.col = "grey50")  +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.35)
+
+# Save Built up presence map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\built") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/built") # Mac
+tmap_save(nga_built_wtd_map, "nga_built_wtd_map_8_29_20.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create COVID-19 map
+
+```{r}
+
+# --------------------------------------------------------------------------
+# 2) Create COVID map ------------------------------------------------------
+# Map modified on 8-29-20
+# --------------------------------------------------------------------------
+
+#create COVID spdf ------------------------------------------------------------
+covid_8_28_20.spdf <- merge(adm2.nga, covid_8_28_20.df, by="GID_2", 
+                            duplicateGeoms = T)
+
+# Assign map to object * used in tmap_arrange: covid_case_score_wtd_map
+# 5  1142  2555  5094 18056 # new case count categories for 
+# Aug 8, 2020 NGA
+
+# covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 > 5094] <- 4                                               # classify as rank (class) 4
+# covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 <= 5094 & covid_8_28_20.df$Covid_case_28_8_20 > 2555] <- 3 # classify as rank (class) 3
+# covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 <= 2555 & covid_8_28_20.df$Covid_case_28_8_20 > 1142] <- 2 # classify as rank (class) 2
+# covid_8_28_20.df$COVID_class_aug_28[covid_8_28_20.df$Covid_case_28_8_20 <= 1142] <- 1  
+
+covid_case_score_wtd_map <- 
+    tm_shape(master_8_29_20.spdf) + 
+    tm_fill("covid_case_score_wtd", title = "COVID-19\ncase counts\nas of\nAug 28, 2020", n = 4, style = "cat", 
+            palette = "YlOrRd", labels = c("< 1143", "1,143 - 2,555", "2,556 - 5,094", "> 5,094"), 
+            lwd =0.01, border.col = "black") +
+    tm_polygons(lwd = 0.25, col = "gray3")  + # "GID_2", border.col = "grey50"
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+
+# Save COVID map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\covid") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/covid")
+tmap_save(covid_case_score_wtd_map, "covid_score_aug_28_wtd_map.png",
+          width =6.78, height=5, units ='in', asp = 0)
+# tmap_save(covid_wtd_map_2, "covi_wtd_map_2.png",
+#           width =6.78, height=5, units ='in', asp = 0)
+    
+```
+
+## Create mean annual rainfall map
+
+```{r}
+# -------------------------------------------------------------------------
+# Mean annual rainfall map Nigeria modified 8-26-20 -----------------------
+# -------------------------------------------------------------------------
+    mean_annual_rf_map <- tm_shape(nga_7_rf.spdf) + 
+        tm_fill("rf_score", title = "Mean annual\nrainfall (mm)",
+                n = 4, style = "cat", 
+                palette = "Greens", labels = c("\U2264 92 mm", "91 - 147 mm ", "148 - 207 mm", "> 207 mm"),
+                lwd =0.01, border.col = "black") + 
+        tm_polygons(lwd = 0.25, col = "gray3") +
+        tm_scale_bar(position = c(0.65, 0.01)) + 
+        tm_layout(frame = FALSE, legend.outside = TRUE, 
+                  legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+        tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+    
+# Save Rainfall map modified 8-26-20 -----------------------
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\covid") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/rainfall")
+tmap_save(mean_annual_rf_map, "nga_rainfall_map_2.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create net availability map
+
+```{r}
+
+# --------------------------------------------------------------------------
+# 3) Create net availability variable and map ---------------------------------
+# --------------------------------------------------------------------------
+# STATUS: GOOD TO GO AS OF 7-15-20
+# [1] 0.009014783 0.233290972 0.354107688 0.493038245 0.792025051
+# (to use in legend)
+# [1] 0.2079749 0.4951487 0.6451532 0.7655778 0.9909852
+
+# unicode character
+# U+2664 is less-than or equal to
+# U+2265 is greater-than or equal to
+
+# tm_shape(nga_7.spdf) + 
+#     tm_fill("net_avlblty_complement_class", title = "ITN Availability", n = 4, style = "cat", 
+#             palette = "Purples", labels = c(">67%", "50-67%", "35-50%", "<35%"), 
+#             lwd =0.01, border.col = "black") + 
+#     tm_polygons(lwd = 0.25, col = "gray3") +
+#     tm_scale_bar() + tm_compass( position = c("left","top")) +
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.outside.position = "right")
+
+RdPu <- get_brewer_pal("RdPu", n = 4, contrast = c(0, 0.42))
+
+# assign map to object
+ITN_avlblty_wt_map <- tm_shape(nga_7.spdf) + 
+    tm_fill("weighted_net_avlblty_complement_score_factor", title = "ITN Availability", n = 4, style = "cat", 
+            palette = "RdPu", labels = c("\u2265 49%", "35 - 48%", "23 - 34%", "<23%"), 
+            lwd =0.01, border.col = "black") + 
+    tm_polygons("GID_2", lwd = 0.10, col = "gray3", border.col = "grey50")  +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.35)
+
+# Save itn availability map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\itn availability") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/itn availability") # mac
+tmap_save(ITN_avlblty_wt_map, "ITN_avlblty_wt_map.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create SMC map
+
+```{r}
+
+# --------------------------------------------------------------------------
+# 4) Create SMC map -----------------------------------------------------------
+# --------------------------------------------------------------------------
+# STATUS: GOOD TO GO AS OF 7-15-20
+# tm_shape(hdx_nga_admin_0) + tm_polygons("ADM0_EN") + tm_legend(show=FALSE) + 
+# How many LGAs are receiving SMC? n = 72
+# table(nga_master6$SMC_class)
+#       0    1 <NA> 
+#     703   72    0 
+
+# spot check SMC map
+ltred <- get_brewer_pal("-Reds", n = 3, contrast = c(0.04, 0.44))
+
+# tm_shape(nga_7.spdf) + 
+#     tm_fill("smc_score_weighted", title = "SMC LGAs ", n=2, style = "cat", 
+#             palette = ltred, labels = c("No", "Yes"), 
+#             lwd =0.01, border.col = "black") + 
+#     tm_polygons(lwd = 0.5, col = "gray3") +
+#     tm_scale_bar(position = c(0.65, 0.01)) + 
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1,
+#               aes.palette = list(seq = "-Reds")) + 
+#     tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1) +
+
+# assign SMC map to object
+nga_smc_weighted_map <- tm_shape(nga_7.spdf) + 
+    tm_fill("smc_score_weighted", title = "SMC LGAs ", n=2, style = "cat", 
+            palette = ltred, labels = c("No", "Yes"), 
+            lwd =0.01, border.col = "black") + 
+    tm_polygons(lwd = 0.5, col = "gray3") +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1,
+              aes.palette = list(seq = "-Reds")) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1) +
+    tm_add_legend(reverse = TRUE)
+
+# convert nga_7_smc_new.spdf to df for quick check
+nga_7_smc_new.df <- as.data.frame(nga_7_smc_new.spdf)
+View(nga_7_smc_new.df)
+
+# add character variable for map
+# nga_7_smc_new.spdf$smc_score_weighted_fac <- as.factor(nga_7_smc_new.spdf$smc_score_weighted)
+
+# assign newest (8-26-20) SMC map to object
+nga_smc_weighted_map_new <- tm_shape(nga_7_smc_new.spdf) + 
+    tm_fill("smc_class_switch", title = "SMC LGAs ", n=2, style = "cat", 
+            palette = ltred, labels = c("Yes", "No"), 
+            lwd =0.01, border.col = "black") + 
+    tm_polygons(lwd = 0.5, col = "gray3") +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1,
+              aes.palette = list(seq = "-Reds")) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1) 
+
+# # no legend outside?
+# nga_smc_weighted_map_arrange <- tm_shape(nga_master7.spdf) + 
+#     tm_fill("smc_score_weighted", title = "SMC LGAs ", n=2, style = "cat", 
+#             palette = "Reds", labels = c("No", "Yes"), 
+#             lwd =0.01, border.col = "black") + 
+#     tm_polygons(lwd = 0.5, col = "gray3") +
+#     #tm_scale_bar() + tm_compass( position = c("left","top")) +
+#     tm_layout(frame = FALSE)#, legend.outside = TRUE, legend.outside.position = "right")
+
+# try water layer
+# nga_water <- tm_shape(adm0.nga) + tm_fill(col="lightblue")=
+
+# Save SMC map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\smc") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/smc") # Mac
+# tmap_save(nga_smc_weighted_map, "nga_smc_weighted_map_2.png",
+#           width =6.78, height=5, units ='in', asp = 0)
+tmap_save(nga_smc_weighted_map_new, "nga_smc_weighted_map_new.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create disruptive event map
+
+```{r}
+
+# --------------------------------------------------------------------------
+# 5) Create disruptive event map ----------------------------------------------
+# Internally displaced population ------------------------------------------
+# --------------------------------------------------------------------------
+# tm_shape(nga_master7.spdf) +
+#     tm_fill("Disruptive_event_score", title = "Disruptive event\nInternally displaced,\nHigh risk populations", n=2, style = "cat",
+#             palette = "Oranges", labels = c("No", "Yes"),
+#             lwd =0.01, border.col = "black") +
+#     tm_polygons(lwd = 0.5, col = "gray3") +
+#     tm_scale_bar() + 
+#     tm_layout(frame = FALSE, legend.outside = TRUE,
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+#     tm_shape(adm1.nga)  + tm_borders(col = "grey40", lwd = 1)
+
+# assign map to object
+disruptive_event_weighted_map <- tm_shape(nga_7.spdf) + 
+    tm_fill("Disruptive_event_score", title = "Internally\ndisplaced\npopulations", n=2, style = "cat", 
+            palette = "Oranges", labels = c("No", "Yes"), 
+            lwd =0.01, border.col = "black") + 
+    tm_polygons(lwd = 0.5, col = "gray3") +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+
+# # no scale bar or compass
+# disruptive_event_weighted_map_arrange <- tm_shape(nga_master7.spdf) +
+#     tm_fill("Disruptive_event_score", title = "Disruptive event\nInternally displaced,\nHigh risk populations", n=2, style = "cat", 
+#             palette = "Oranges", labels = c("No", "Yes"), 
+#             lwd =0.01, border.col = "black") + 
+#     tm_polygons(lwd = 0.5, col = "gray3") +
+#     tm_layout(frame = FALSE)
+
+# Save disruptive event map
+setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\disruptive event") #pc
+# setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/disruptive event") #mac
+tmap_save(disruptive_event_weighted_map, "disruptive_event_weighted_map.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create Last LLIN campaign map
+
+```{r}
+
+# --------------------------------------------------------------------------
+# 6) Create LLIN last LLIN campaign map ---------------------------------------
+# --------------------------------------------------------------------------
+
+# quick check for missing values
+table(nga_master6_sorted$ITN_dist_score, useNA = "always")
+#    0.75  1.5 2.25    3 <NA> 
+#     512  107   17  139    0 
+
+# tm_shape(nga_master7.spdf) + 
+#     tm_fill("ITN_dist_score", title = "Years since last\nLLIN distribution",
+#             n = 4, style = "cat", 
+#             palette = "Blues", labels = c("< 3 years", "3 years",
+#                                           "5 years", ">=6 years"), 
+#             lwd =0.01, border.col = "black") + 
+#     tm_polygons(lwd = 0.25, col = "gray3") +
+#     tm_scale_bar() + tm_compass( position = c("left","top")) +
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.outside.position = "right")
+
+# assign map to object
+yr_last_llin_wt_map <- tm_shape(master_8_29_20.spdf) + 
+    tm_fill("ITN_dist_score_factor", title = "Years since last\nITN distribution",
+            n = 4, style = "cat", 
+            palette = "Blues", labels = c("< 3 years", "3 years",
+                                          "5 years", "\u2265 6 years"), 
+            lwd =0.01, border.col = "black") + 
+    tm_polygons(lwd = 0.25, col = "gray3") +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+
+# Save last LLIN campaign map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\yr last LLIN") # pc
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/yr last LLIN") #mac
+tmap_save(yr_last_llin_wt_map, "yr_last_llin_wt_map_8_29_20.png", 
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Remove this section?
+
+```{r}
+
+# --------------------------------------------------------------------------
+# 7) Create mean annual rainfall map ---------------------------------------
+# --------------------------------------------------------------------------
+# 
+# # Re-create dataset for make new rainfall map
+# nga_7_new.spdf <- merge(adm2.nga, nga_7_subset, by="GID_2", duplicateGeoms = T)
+# # Convert score to factor
+# nga_7_new.spdf$rf_score <- as.factor(nga_7_new.spdf$rf_score)
+# 
+# # Rainfall jenks are:
+# # [1]  30.85152  92.29017 146.79149 206.53586 300.44352
+# 
+# # TASK: FIX LABELS FOR RAIN!!!
+# 
+# # Spot check rainfall map
+# tm_shape(nga_7_new.spdf) + 
+#     tm_fill("rf_score", title = "Mean annual\nrainfall (mm)",
+#             n = 4, style = "cat", 
+#             palette = "Greens", labels = c("\U2264 92 mm", "> 92 mm & \U2264 147 mm ", "> 147 mm & \U2264 207 mm", "> 207 mm"), 
+# lwd =0.01, border.col = "black") + 
+#     tm_polygons(lwd = 0.25, col = "gray3") +
+#     tm_scale_bar(position = c(0.65, 0.01)) + 
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+#     tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+# 
+# # Assign rf map to object
+# mean_annual_rf_map <- tm_shape(nga_7_new.spdf) + 
+#     tm_fill("rf_score", title = "Mean annual\nrainfall (mm)",
+#             n = 4, style = "cat", 
+#             palette = "Greens", labels = c("\U2264 92 mm", "91-147 mm ", "148-207 mm", "> 207 mm"),
+#             lwd =0.01, border.col = "black") + 
+#     tm_polygons(lwd = 0.25, col = "gray3") +
+#     tm_scale_bar(position = c(0.65, 0.01)) + 
+#     tm_layout(frame = FALSE, legend.outside = TRUE, 
+#               legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+#     tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 1)
+# 
+# # Save rainfall map
+# # setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\rainfall") # pc
+# setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/rainfall") #mac
+# tmap_save(mean_annual_rf_map, "mean_annual_rf_map_new_2.png", 
+#           width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create PBO map
+
+```{r}
+# --------------------------------------------------------------------------
+# 5) Create PBO map ----------------------------------------------
+# --------------------------------------------------------------------------
+
+YlGn <- get_brewer_pal("YlGn", n = 2, contrast = c(0, 0.42))
+
+# assign map to object
+pbo_wtd_map <- tm_shape(nga_7.spdf) + 
+    tm_fill("pbo_score_factor", title = "PBO nets\ndistributed\nin 2019", n=2, style = "cat", 
+            palette = "YlGn", labels = c("Yes", "No"), 
+            lwd =0.01, border.col = "black") + 
+    tm_polygons("GID_2", lwd = 0.10, col = "gray3", border.col = "grey50")  +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = TRUE, 
+              legend.position = c("RIGHT","BOTTOM"), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.35)
+
+# Save disruptive event map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\disruptive event") #pc
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/pbo") #mac
+tmap_save(pbo_wtd_map, "pbo_wtd_map.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+## Create faceted maps
+
+```{r}
+
+# --------------------------------------------------------------------------
+# Make tmap_arrange figure -------------------------------------------------
+# --------------------------------------------------------------------------
+# Use tmap_arrange
+# 3 column map with compass and scale bar
+# tmap_arrange_compass_scale <- tmap_arrange(nga_states_map_0_75_text, nga_smc_weighted_map, 
+#              disruptive_event_weighted_map, yr_last_llin_wt_map,
+#              ITN_access_wt_map, covid_case_score_wtd_map, ncol = 3)
+
+# Assign tmap arrange to object
+# Map has compass and scale bar, 2 columns of maps ----
+tmap_arrange_1 <- tmap_arrange(nga_smc_weighted_map_new, 
+                               disruptive_event_weighted_map, 
+                               yr_last_llin_wt_map, 
+                               ITN_avlblty_wt_map,
+                               covid_case_score_wtd_map,
+                               nga_built_wtd_map,
+                               ncol = 2)
+
+tmap_arrange_2 <- tmap_arrange(mean_annual_rf_map,
+                               temp_suit_map,
+                               pbo_wtd_map,
+                               ncol = 2)
+
+# Save tmap_arrange 2 column outputs
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\tmap_arrange") # PC
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/tmap_arrange") # Mac
+
+# save 2 columns of tmap_arrange (6 maps) ----------------------------
+tmap_save(tmap_arrange_1, 
+          "tmap_arrange_1_v5.png", width =6.78,
+          height=5, units ='in', asp = 0)
+# save 2 columns of tmap_arrange (3 maps) ----------------------------
+tmap_save(tmap_arrange_2, 
+          "tmap_arrange_2_v5.png", width =6.78,
+          height=5, units ='in', asp = 0)
+
+```
+
+## Data management
+
+```{r}
+
+# -------------------------------------------------------------------------------------------------------------
+# IMPORTANT TASKS 7-10-20: 
+# -------------------------------------------------------------------------------------------------------------
+# 1) Confirm that classes and scores were created correctly for indicators and don't require complement values
+#    e.g ITN_dist_class (& score)
+# COVID_case_class
+# Disruptive_event_class (does this require modification or use of mean from UN index?)
+# SMC_class (0 or 1) 
+# -------------------------------------------------------------------------------------------------------------
+
+# For input chloropleth maps, include the following variables:
+# SMC_score, ITN_dist_score, COVID_case_score, Disruptive_event_score,
+# temp suitability, rainfall anomaly, built up area/presence index
+# slim down for quick map creation
+# NOTE: Covid_case_score is being updated by Alyssa on 7-10-20, don't use until updated by you or her
+nga_quick_map_slim <- nga_master6[c(1, 14, 17, 19, 21, 33, 34) ] # slim down NGA_master6
+View(nga_quick_map_slim)
+
+# Convert nga_7.spdf to dataframe for manipulation
+nga_7_v2.df <- as.data.frame(nga_7.spdf)
+
+#Make disruptive_event_class a numeric
+nga_7_v2.df$Disruptive_event_class <- as.numeric(nga_7_v2.df$Disruptive_event_class)
+
+
+```
+
+## Internally displaced population 
+
+```{r}
+#---------------------------------------------------------------------
+# Create an internally displaced population subset map ---------------
+#---------------------------------------------------------------------
+
+idp_map_vars <- c(1, 5, 7, 62, 77, 83 )
+idp_map_vars.df <- nga_7_8_29_20.df[idp_map_vars]
+View(idp_map_vars.df)
+
+# n = 58. This should consist of the n = 58 LGAs that have
+# internally displaced populations
+nga_idp <- filter(idp_map_vars.df, idp_eq_wt_score == 0.5)
+# what are the malaria risk (factor - variable type) values?
+View(nga_idp)
+
+weighted_idp_8_31_20.spdf <- filter(weighted, Disruptive_event_class==1)
+
+# Merge weighted.spdf with nga_idp
+# n = 775
+weighted_idp.spdf <- merge(adm2.nga, nga_idp, by="GID_2", duplicateGeoms = T)
+
+table(weighted_idp.spdf$Malaria_risk_factor, useNA = "always")
+# 1    2    3    4    5 <NA> 
+# 4    4   25   18    7    0 
+# Note: New results on 8-6-20
+# 1    2    3    4 <NA> 
+# 4   11   26   17    0 
+
+# Note: New results on 8-31-20
+#   1    2    3    4    5    6 <NA> 
+# 122  154  185  156  108   50    0
+
+# New results on 9-4-20
+# 1    2    3    4    5    6 <NA> 
+# 8   30   20    0    0    0  717 
+
+# weighted_idp_2.spdf <- filter(weighted_idp.spdf, Disruptive_event_class == 1)
+
+# get jenks for this subset
+getJenksBreaks(weighted_idp.spdf$Malaria_risk_factor, 3, subset = NULL)
+# [1] 1 2 3 5
+# new jenks run on 8-6-20
+# [1] 1 2 3 4
+# new jenks run on 9-4-20
+# [1] 1 1 2 3
+summary(weighted_idp.spdf$Malaria_risk_factor)
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 1.000   2.250   3.000   2.966   4.000   4.000 
+
+weighted_idp.spdf$idp_risk_group[weighted_idp.spdf$Malaria_risk_factor == 3 ]  <- 3                                        # classify as rank 3
+weighted_idp.spdf$idp_risk_group[weighted_idp.spdf$Malaria_risk_factor == 2 ] <- 2  # classify as rank 2
+weighted_idp.spdf$idp_risk_group[weighted_idp.spdf$Malaria_risk_factor == 1 ] <- 1                                         # classify as rank 1
+
+# spot check
+table(weighted_idp.spdf$idp_risk_group, useNA = "always")
+# 1    2    3 <NA> 
+# 8   30   20  717  
+
+# convert idp_risk group to factor variable
+weighted_idp.spdf$idp_risk_grp_fac <- as.factor(weighted_idp.spdf$idp_risk_group)
+# verify same amt of values in groups
+table(weighted_idp.spdf$idp_risk_grp_fac, useNA = "always") 
+# 1    2    3 <NA> 
+# 8   25   25    0 
+# new distribution of idp_risk_grp_fac on 8-6-20
+#  1    2    3 <NA> 
+# 15   26   17    0 
+
+# distrib on 9-4-20
+# 1    2    3 <NA> 
+# 8   30   20  717 
+
+# Convert weighted_idp.spdf to df
+weighted_idp.df <- as.data.frame(weighted_idp.spdf)
+
+# subset nga_idp to make easy to manage 
+nga_idp_slim.spdf <- weighted_idp.spdf[c(1, 5, 7, 17,18, 20) ] # slim down nga_idp
+# visualize nga_idp_slim
+head(nga_idp_slim)
+
+# merge with  adm2.nga to make spdf
+nga_7_slim.spdf <- merge(nga_idp_slim, weighted.spdf, by="GID_2", duplicateGeoms = T)
+
+# spot check
+table(nga_7_slim.spdf$Malaria_risk_factor, useNA = "always")
+#  1    2    3 <NA> 
+# 15   26   17    0 
+```
+
+## Create internally displaced population risk categories
+
+```{r}
+# Create high, med, low risk category variable
+nga_7_slim.spdf$idp_risk_level[nga_7_slim.spdf$idp_risk_group == 3] <- "Highest"   # classify as rank 3
+nga_7_slim.spdf$idp_risk_level[nga_7_slim.spdf$idp_risk_group == 2] <- "Higher"     # classify as rank 2
+nga_7_slim.spdf$idp_risk_level[nga_7_slim.spdf$idp_risk_group == 1] <- "High"  
+
+# Create high, med, low risk category variable
+weighted_idp.spdf$idp_risk_level[weighted_idp.spdf$idp_risk_grp_fac == 3] <- "Highest"   # classify as rank 3
+weighted_idp.spdf$idp_risk_level[weighted_idp.spdf$idp_risk_grp_fac == 2] <- "Higher"     # classify as rank 2
+weighted_idp.spdf$idp_risk_level[weighted_idp.spdf$idp_risk_grp_fac == 1] <- "High"  
+
+# spot check
+table(weighted_idp.spdf$idp_risk_level, useNA = "always")
+# High  Higher Highest    <NA> 
+#   15      26      17       0 
+
+# 9-4-20
+# High  Higher Highest    <NA> 
+#     8      30      20     717 
+
+# Remove unnecessary variables from table for report
+idp_table.spdf <- weighted_idp.spdf[c(1, 5, 7, 17, 20) ] 
+
+idp_table.df <- as.data.frame(idp_table.spdf)
+
+names(idp_table.spdf)
+
+# Rename variables
+idp_table.df$LGA <- idp_table.df$NAME_2.x
+
+# View dataset
+View(idp_table.df)
+
+# Remove NAME_2.x variable
+idp_table_v2.df <- idp_table.df[-c(3)]
+idp_table_v2.df <- idp_table_v2.df[c(1, 2, 6, 3, 4, 5) ] 
+
+# View dataset
+View(idp_table_v2.df)
+
+# Sort by Risk_category
+idp_table_sorted_v2.df <- idp_table_v2.df[order(-idp_table_v2.df$Risk_category.x),]
+# View dataset
+View(idp_table_sorted_v2.df)
+
+# Export idp subset dataset with risk scores/categories --------
+write.csv(idp_table_sorted_v2.df,"/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/idp_table_df_v2.csv", row.names = TRUE)
+write.csv(idp_table.df,"/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Datasets/idp_table_9_4_20.csv", row.names = TRUE)
+
+# Convert to spdf for map
+idp_table_sorted_v3.spdf <- merge(weighted_idp.spdf, idp_table_sorted_v2.df, by="GID_2", duplicateGeoms = T)
+
+```
+
+## Create internally displaced populations map
+
+```{r}
+
+#--------------------------------------------------
+# Make IDP LGAs prioritization map ----------------
+# n = 58 LGAs -------------------------------------
+# -------------------------------------------------
+
+# Assign color palette
+PuRd <- get_brewer_pal("PuRd", n = 3)
+
+# Note: Modified on 8-6-20
+# assign map to object
+idp_58_wghtd_legend_map <- tm_shape(idp_table.spdf) + 
+    tm_fill("idp_risk_grp_fac", title = "Malaria risk/\nITN prioritization of\nLGAs with internally\n displaced persons",
+            n=2, style = "cat", 
+            palette = "PuRd", labels = c("High", "Higher", "Highest"), 
+            lwd =0.01, border.col = "black",
+            colorNA = NA) + 
+    tm_polygons(lwd = 0.5, col = "gray3") +
+    tm_scale_bar(position = c(0.65, 0.01)) + 
+    tm_layout(frame = FALSE, legend.outside = FALSE,
+              legend.position = c(0.75,0.07), legend.title.size = 1) +
+    tm_shape(adm1.nga) + tm_borders(col = "grey40", lwd = 0.35)
+
+# Save disruptive event map
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\Maps\\disruptive event") #pc
+setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/Maps/disruptive event") #mac
+tmap_save(idp_58_wghtd_legend_map, "idp_58_wghtd_legend_map_9_4_20.png",
+          width =6.78, height=5, units ='in', asp = 0)
+
+```
+
+
