@@ -47,7 +47,7 @@ cat("\014")
 ## Task: 
 ## 1) filter through these and determine which packages you don't need
 ## 2) determine which packages might interfere with concurrently loaded packages
-   and make a note of it
+##    and make a note of it
 
 ```{r}
 
@@ -161,7 +161,7 @@ adm1.nga <- subset(getData("GADM", country = "NGA", level = 1)) # n = 37 states
 # appears to have n = 775 observations for GID_2
 # Note: If I use NAME_2, only n = 770 unique identifiers exist
 adm2.nga <- subset(getData("GADM", country = "NGA", level = 2)) # LGAs
-plot(adm2.nga)
+# plot(adm2.nga)
 
 # Plot map in tmap ------------------------------------------------------------
 tm_shape(adm2.nga) + tm_polygons("GID_2") + tm_legend(show=FALSE)
@@ -245,15 +245,19 @@ tm_layout(frame = FALSE, legend.outside = TRUE,
 # nga_master6 <- read.csv("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\NGA_master6_2.csv", header = TRUE) #PC
 # Bring in NGA_master6_2.xls excel file in as .xls instead of .csv
 # See if this resolves variable renaming issues (NAME_2)
-setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data")
-nga_master6 <- read_excel("NGA_master6_2.xls")
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data")
+# setwd("/Users/willeaton/Box/Will External Drives/LACIE MacOS Extended/Malaria Consortium/Nigeria Data")
+# nga_master6 <- read_excel("NGA_master6_2.xls")
+nga_master6 <- read_excel("/Users/willeaton/Box/Will External Drives/LACIE MacOS Extended/Malaria Consortium/Nigeria Data/NGA_master6_2.xls")
 # View(nga_master6)
 
 # Bring in spatial interpolation data from M. Worges 
 # (n = 775 LGAs, usingunique identifier = GID_2)
-setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\MWorges INLA SPDE") # Travis PC
-setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/MWorges INLA SPDE")
-sp_interp_data <- read_excel("ZonalStats_NGA_V5.xlsx")
+# setwd("D:\\LACIE MacOS Extended\\Tulane Research Projects\\Malaria Consortium\\Nigeria Data\\MWorges INLA SPDE") # Travis PC
+# setwd("/Volumes/Samsung T5/LACIE MacOS Extended/Tulane Research Projects/Malaria Consortium/Nigeria Data/MWorges INLA SPDE")
+# setwd("/Users/willeaton/Box/Will External Drives/LACIE MacOS Extended/Malaria Consortium/Nigeria Data/MWorges INLA SPDE")
+# sp_interp_data <- read_excel("ZonalStats_NGA_V5.xlsx")
+sp_interp_data <- read_excel("/Users/willeaton/Box/Will External Drives/LACIE MacOS Extended/Malaria Consortium/Nigeria Data/MWorges INLA SPDE/ZonalStats_NGA_V5.xlsx")
 
 # Check sp_interp_data for missing values ------------------------------------
 table(sp_interp_data$NetAvlblty.wghted, useNA = "always") # no missing values
@@ -283,6 +287,7 @@ table(sp_interp_data$NetAvlblty.wghted, useNA = "always") # no missing values
 
 ```
 
+## Net availability
 ## Jenks natural breaks steps (!!!rename this section!!!)
 
 ```{r}
@@ -303,7 +308,7 @@ getJenksBreaks(sp_interp_data$net_avlblty_complement, 5, subset = NULL)
 
 ```
 
-## Create complement classes (!!! rename this section)
+## Create net availability complement classes (!!! rename this section)
 
 ```{r}
 
@@ -345,7 +350,6 @@ nga_7 <- nga_master6_sp_combo
 
 ```
 
-
 ## Import COVID data and manage COVID data
 
 ```{r}
@@ -369,7 +373,6 @@ View(nga_8_28_20_slim.df)
 covid_8_28_20_vars <- c(1, 2, 16, 24, 25, 43, 56)
 covid_8_28_20.df <- nga_8_28_20_slim.df[covid_8_28_20_vars]
 View(covid_8_28_20.df)
-
 
 # COVID jenks ----------------------------------------------------------------
 # Obtain 5 classes of breaks for COVID 
@@ -517,12 +520,12 @@ nga_7$smc_weight_0_82 <- 0.82
 # nga_7$smc_score_weighted <- nga_7$smc_weight_0_82 * nga_7$SMC_class calculated incorrectly
 
 # States that received SMC include:
-Borno         6% coverage
-Yobe         27% coverage
-Katsina      26% coverage
-Jigawa      107% coverage
-Sokoto      111% coverage
-Zamfara     114% coverage
+# Borno         6% coverage
+# Yobe         27% coverage
+# Katsina      26% coverage
+# Jigawa      107% coverage
+# Sokoto      111% coverage
+# Zamfara     114% coverage
 
 ```
 
@@ -868,7 +871,7 @@ nga_7_subset_smc_rev_2$temp_suit_score <- as.numeric(nga_7_subset_smc_rev_2$temp
 
 ```
 
-# Data management steps
+## Data management steps
 
 ```{r}
 # Bring in new rainfall and covid scores to malaria risk prioritization index
