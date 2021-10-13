@@ -4,19 +4,21 @@
 # PROJECT: ITN targeting in Nigeria, Malaria Consortium
 # AUTHOR: Alyssa Young, Tulane SPHTM
 # Date created: 9/21/21
-# Date last modified: 9/21/21
+# Date last modified: 10/13/21 by WE
 
-setwd ("C:\\Users\\Alyssa\\OneDrive\\Desktop\\Malaria Consortium")
+# setwd ("C:\\Users\\Alyssa\\OneDrive\\Desktop\\Malaria Consortium")
+setwd("/Users/willeaton/Box/Will External Drives/LACIE MacOS Extended/Malaria Consortium/Methodology/AHP") # Will's working directory
 
 #load relevant packages and libraries
-install.packages("ahpsurvey")
+# install.packages("ahpsurvey")
 library(ahpsurvey)
-library(magrittr) # needs to be run every time you start R and want to use %>%
-library(dplyr)
-library(ggplot2)
+# library(magrittr) # needs to be run every time you start R and want to use %>%
+# library(dplyr)
+# library(ggplot2)
 library(tidyverse)
 library(devtools)
-#dataset will consist of 20 pair-wise comparisons of 10 indicators 
+
+# dataset will consist of 20 pair-wise comparisons of 10 indicators 
 # since we have already distributed surveys among experets to obtain weights, we will take them mean weight base don survey reponses
 # and assign intensity of importance based on Saaty's pari wise comparison table with 9 degrees
 
