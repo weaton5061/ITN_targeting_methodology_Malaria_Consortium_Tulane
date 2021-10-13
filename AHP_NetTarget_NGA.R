@@ -19,22 +19,53 @@ library(tidyverse)
 library(devtools)
 
 # dataset will consist of 20 pair-wise comparisons of 10 indicators 
-# since we have already distributed surveys among experets to obtain weights, we will take them mean weight base don survey reponses
-# and assign intensity of importance based on Saaty's pari wise comparison table with 9 degrees
+# since we have already distributed surveys among experets to obtain weights, 
+# we will take them mean weight base don survey reponses
+# and assign intensity of importance based on Saaty's pari wise comparison 
+# table with 9 degrees
 
 # import dataset
-AHP.NGA <-read.csv("C:\\Users\\Alyssa\\OneDrive\\Desktop\\Malaria Consortium\\AHP_translated_survey_response.csv")
+AHP.NGA <-read.csv("/Users/willeaton/Box/Will External Drives/LACIE MacOS Extended/Malaria Consortium/Methodology/AHP/AHP_translated_survey_response.csv") # from WE
+# AHP.NGA <-read.csv("C:\\Users\\Alyssa\\OneDrive\\Desktop\\Malaria Consortium\\AHP_translated_survey_response.csv") # AY's dataset
 atts<- c("RFE", "PfTSI", "prev", "ITNAccess", "NoyrsITN", "PBO", "UrbRur", "SMC", "MWI", "IDPs")
 data(AHP.NGA)
 head(AHP.NGA)
 
-# Convert Saatay scale values from negative to positive, convert negative values to reciprocal in pairwaise matrix ------------------------------------------------------------------------
+# --- Take the inverse of the Saaty's values since: --- #
+# "The simulated dataset consists of ten pairwise comparisons of five attributes,
+# which are “culture”, “family”, “housing”, “jobs” and “transportation.” 
+# An individual compares the attributes in a pairwise fashion; if culture is
+# more important than house by 2 units on the Saaty scale, the dataset will 
+# code it as -2. This is important to bear in mind as we move on."
+
+# --- make a fresh copy --- #
+AHP.NGA.inverse <- AHP.NGA
+
+# --- Now only apply this to the numeric values --- #
+AHP.NGA.inverse[sapply(AHP.NGA.inverse, is.numeric)] <- AHP.NGA.inverse[sapply(AHP.NGA.inverse, is.numeric)] * -1
+
+# --- Verify inverse function worked on data frame --- #
+AHP.NGA.inverse
+
+ 
+# --- Note: For ahp.mat to work, the value in A_B variable have to be the 
+# importance A has over B in positive values. In this case, the values should be 
+# converted from negative to positive, and the negative values would be converted 
+# to its reciprocal in the pairwise matrix. When data is coded in the above way, 
+# set negconvert = TRUE. If the data is already coded in the reciprocal 
+# (as opposed to negatives), set reciprocal = FALSE. --- #
+
+
+# Convert Saatay scale values from negative to positive, convert negative -----
+# values to reciprocal in pairwaise matrix ------------------------------------
 AHP.NGA %>%
-ahp.mat (atts=atts, negconvert = TRUE)%>%
+ahp.mat (atts=atts, negconvert = FALSE) %>% # note defaults to reciprocal = TRUE
 head(3)
 
-# compute individual priorties of survey responses, return dtaaframe containing the preferencce weights from survey responses --------------------------------------------------------------
-# normalize matrices so that all columns add up to , then compute the avete of the row as thepreference weights of each attribute
+# compute individual priorities of survey responses, return data frame --------
+# containing the preference weights from survey responses 
+# normalize matrices so that all columns add up to , then compute the avete of
+# the row as the preference weights of each attribute
 AHP.NGA.ipw <- AHP.NGA %>%
   ahp.mat(atts, negconvert = T)
 eigentrue <- ahp.indpref(AHP.NGA.ipw, atts, method = "eigen")
